@@ -1,5 +1,5 @@
 # Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-# file Copyright.txt or https://cmake.org/licensing for details.
+# file LICENSE.rst or https://cmake.org/licensing for details.
 
 add_executable(ccmake
   ccmake.cxx
@@ -60,4 +60,4 @@ if(CMake_JOB_POOL_LINK_BIN)
 endif()
 
 CMake_OPTIONAL_COMPONENT(ccmake)
-install(TARGETS ccmake DESTINATION ${CMAKE_BIN_DIR} ${COMPONENT})
+install(TARGETS ccmake DESTINATION ${CMake_INSTALL_BIN_DIR} ${COMPONENT})

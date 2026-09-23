@@ -24,13 +24,13 @@ exist to add libraries (:command:`target_link_libraries` or
   see the :prop_tgt:`STATIC_LIBRARY_OPTIONS` target property.
 
 .. |command_name| replace:: ``add_link_options``
-.. include:: GENEX_NOTE.txt
+.. include:: include/GENEX_NOTE.rst
 
-.. include:: DEVICE_LINK_OPTIONS.txt
+.. include:: include/DEVICE_LINK_OPTIONS.rst
 
-.. include:: OPTIONS_SHELL.txt
+.. include:: include/OPTIONS_SHELL.rst
 
-.. include:: LINK_OPTIONS_LINKER.txt
+.. include:: include/LINK_OPTIONS_LINKER.rst
 
 See Also
 ^^^^^^^^
@@ -42,3 +42,8 @@ See Also
 * :variable:`CMAKE_<LANG>_FLAGS` and :variable:`CMAKE_<LANG>_FLAGS_<CONFIG>`
   add language-wide flags passed to all invocations of the compiler.
   This includes invocations that drive compiling and those that drive linking.
+
+* .. versionadded:: 4.3
+    :variable:`CMAKE_<LANG>_LINK_FLAGS` and
+    :variable:`CMAKE_<LANG>_LINK_FLAGS_<CONFIG>` add language-wide flags passed
+    to all invocations of the compiler which drive linking.

@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 
 #include "cmExperimental.h"
 
@@ -7,8 +7,10 @@
 #include <cstddef>
 #include <string>
 
+#include "cmGlobalGenerator.h"
 #include "cmMakefile.h"
 #include "cmMessageType.h"
+#include "cmStringAlgorithms.h"
 #include "cmValue.h"
 
 namespace {
@@ -18,7 +20,7 @@ namespace {
  * Search for other instances to keep the documentation and test suite
  * up-to-date.
  */
-cmExperimental::FeatureData LookupTable[] = {
+cmExperimental::FeatureData const LookupTable[] = {
   // ExportPackageDependencies
   { "ExportPackageDependencies",
     "1942b4fa-b2c5-4546-9385-83f254070067",
@@ -26,58 +28,61 @@ cmExperimental::FeatureData LookupTable[] = {
     "CMake's EXPORT_PACKAGE_DEPENDENCIES support is experimental. It is meant "
     "only for experimentation and feedback to CMake developers.",
     {},
-    cmExperimental::TryCompileCondition::Always,
-    false },
-  // WindowsKernelModeDriver
-  { "WindowsKernelModeDriver",
-    "fac18f65-504e-4dbb-b068-f356bb1f2ddb",
-    "CMAKE_EXPERIMENTAL_WINDOWS_KERNEL_MODE_DRIVER",
-    "CMake's Windows kernel-mode driver support is experimental. It is meant "
-    "only for experimentation and feedback to CMake developers.",
-    {},
-    cmExperimental::TryCompileCondition::Always,
-    false },
+    cmExperimental::TryCompileCondition::Always },
   // CxxImportStd
   { "CxxImportStd",
-    "0e5b6991-d74f-4b3d-a41c-cf096e0b2508",
+    "451f2fe2-a8a2-47c3-bc32-94786d8fc91b",
     "CMAKE_EXPERIMENTAL_CXX_IMPORT_STD",
     "CMake's support for `import std;` in C++23 and newer is experimental. It "
     "is meant only for experimentation and feedback to CMake developers.",
     {},
-    cmExperimental::TryCompileCondition::Always,
-    false },
-  // ExportPackageInfo
-  { "ExportPackageInfo",
-    "b80be207-778e-46ba-8080-b23bba22639e",
-    "CMAKE_EXPERIMENTAL_EXPORT_PACKAGE_INFO",
-    "CMake's support for exporting package information in the Common Package "
-    "Specification format is experimental. It is meant only for "
-    "experimentation and feedback to CMake developers.",
+    cmExperimental::TryCompileCondition::Always },
+  // MappedPackageInfo
+  { "MappedPackageInfo",
+    "ababa1b5-7099-495f-a9cd-e22d38f274f2",
+    "CMAKE_EXPERIMENTAL_MAPPED_PACKAGE_INFO",
+    "CMake's support for generating package information in the Common Package "
+    "Specification format from CMake script exports is experimental. It is "
+    "meant only for experimentation and feedback to CMake developers.",
     {},
-    cmExperimental::TryCompileCondition::Always,
-    false },
+    cmExperimental::TryCompileCondition::Always },
   // ExportBuildDatabase
   { "ExportBuildDatabase",
-    "4bd552e2-b7fb-429a-ab23-c83ef53f3f13",
+    "73194a1d-c0b5-41b9-9190-a4512925e192",
     "CMAKE_EXPERIMENTAL_EXPORT_BUILD_DATABASE",
     "CMake's support for exporting build databases is experimental. It is "
     "meant only for experimentation and feedback to CMake developers.",
     {},
-    cmExperimental::TryCompileCondition::Never,
-    false },
+    cmExperimental::TryCompileCondition::Never },
+  { "GenerateSbom",
+    "ca494ed3-b261-4205-a01f-603c95e4cae0",
+    "CMAKE_EXPERIMENTAL_GENERATE_SBOM",
+    "CMake's support for generating software bill of materials (Sbom) "
+    "information in SPDX format is experimental. It is meant only for "
+    "experimentation and feedback to CMake developers.",
+    {},
+    cmExperimental::TryCompileCondition::Never },
+  // Rust support
+  { "Rust",
+    "3cc9b32c-47d3-4056-8953-d74e69fc0d6c",
+    "CMAKE_EXPERIMENTAL_RUST",
+    "CMake's support for the Rust programming language is experimental. "
+    "It is meant only for experimentation and feedback to CMake developers.",
+    {},
+    cmExperimental::TryCompileCondition::Never },
 };
 static_assert(sizeof(LookupTable) / sizeof(LookupTable[0]) ==
                 static_cast<size_t>(cmExperimental::Feature::Sentinel),
               "Experimental feature lookup table mismatch");
 
-cmExperimental::FeatureData& DataForFeature(cmExperimental::Feature f)
+cmExperimental::FeatureData const& DataForFeature(cmExperimental::Feature f)
 {
   assert(f != cmExperimental::Feature::Sentinel);
   return LookupTable[static_cast<size_t>(f)];
 }
 }
 
-const cmExperimental::FeatureData& cmExperimental::DataForFeature(Feature f)
+cmExperimental::FeatureData const& cmExperimental::DataForFeature(Feature f)
 {
   return ::DataForFeature(f);
 }
@@ -99,16 +104,27 @@ cm::optional<cmExperimental::Feature> cmExperimental::FeatureByName(
 bool cmExperimental::HasSupportEnabled(cmMakefile const& mf, Feature f)
 {
   bool enabled = false;
-  auto& data = ::DataForFeature(f);
+  FeatureData const& data = cmExperimental::DataForFeature(f);
 
-  auto value = mf.GetDefinition(data.Variable);
-  if (value == data.Uuid) {
-    enabled = true;
-  }
+  if (cmValue value = mf.GetDefinition(data.Variable)) {
+    enabled = *value == data.Uuid;
 
-  if (enabled && !data.Warned) {
-    mf.IssueMessage(MessageType::AUTHOR_WARNING, data.Description);
-    data.Warned = true;
+    if (mf.GetGlobalGenerator()->ShouldWarnExperimental(data.Name, *value)) {
+      if (enabled) {
+        mf.IssueMessage(MessageType::AUTHOR_WARNING, data.Description);
+      } else {
+        mf.IssueMessage(
+          MessageType::AUTHOR_WARNING,
+          cmStrCat(
+            data.Variable, " is set to incorrect value\n  ", value,
+            "\n"
+            "See 'Help/dev/experimental.rst' in the source tree of this "
+            "version of CMake for documentation of the experimental feature "
+            "and the corresponding activation value.  This project's code "
+            "may require changes to work with this CMake's version of the "
+            "feature."));
+      }
+    }
   }
 
   return enabled;

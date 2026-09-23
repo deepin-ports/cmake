@@ -6,8 +6,8 @@ Add compile definitions to a target.
 .. code-block:: cmake
 
   target_compile_definitions(<target>
-    <INTERFACE|PUBLIC|PRIVATE> [items1...]
-    [<INTERFACE|PUBLIC|PRIVATE> [items2...] ...])
+    <INTERFACE|PUBLIC|PRIVATE> <definition>...
+    [<INTERFACE|PUBLIC|PRIVATE> <definition>... ...])
 
 Specifies compile definitions to use when compiling a given ``<target>``.  The
 named ``<target>`` must have been created by a command such as
@@ -26,7 +26,7 @@ same ``<target>`` append items in the order called.
   Allow setting ``INTERFACE`` items on :ref:`IMPORTED targets <Imported Targets>`.
 
 .. |command_name| replace:: ``target_compile_definitions``
-.. include:: GENEX_NOTE.txt
+.. include:: include/GENEX_NOTE.rst
 
 Any leading ``-D`` on an item will be removed.  Empty items are ignored.
 For example, the following are all equivalent:

@@ -13,7 +13,7 @@ Copy a file to another location and modify its contents.
                  [NO_SOURCE_PERMISSIONS | USE_SOURCE_PERMISSIONS |
                   FILE_PERMISSIONS <permissions>...]
                  [COPYONLY] [ESCAPE_QUOTES] [@ONLY]
-                 [NEWLINE_STYLE [UNIX|DOS|WIN32|LF|CRLF] ])
+                 [NEWLINE_STYLE [UNIX|DOS|WIN32|LF|CRLF]])
 
 Copies an ``<input>`` file to an ``<output>`` file while performing
 `transformations`_ of the input file content.
@@ -193,7 +193,7 @@ specify the output directory as an include directory:
 
 .. code-block:: cmake
 
-  target_include_directories(<target> [SYSTEM] <INTERFACE|PUBLIC|PRIVATE> "${CMAKE_CURRENT_BINARY_DIR}")
+  target_include_directories(<target> [SYSTEM] {INTERFACE|PUBLIC|PRIVATE} "${CMAKE_CURRENT_BINARY_DIR}")
 
 so that sources may include the header as ``#include <foo.h>``.
 

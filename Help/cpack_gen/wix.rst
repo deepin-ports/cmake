@@ -3,7 +3,7 @@ CPack WIX Generator
 
 Use the `WiX Toolset`_ to produce a Windows Installer ``.msi`` database.
 
-.. _`WiX Toolset`: https://wixtoolset.org/
+.. _`WiX Toolset`: https://www.firegiant.com/wixtoolset/
 
 .. versionadded:: 3.7
   The :variable:`CPACK_COMPONENT_<compName>_DISABLED` variable is now
@@ -222,7 +222,7 @@ Windows using WiX.
  simply provide the name of the culture.  If you specify more than one
  culture identifier in a comma or semicolon delimited list, the first one
  that is found will be used.  You can find a list of supported languages at:
- https://wixtoolset.org/docs/v3/wixui/wixui_localization/
+ https://docs.firegiant.com/wix3/wixui/wixui_localization/
 
 .. variable:: CPACK_WIX_TEMPLATE
 
@@ -408,8 +408,9 @@ Windows using WiX.
  In 32-bit builds the token will expand empty while in 64-bit builds
  it will expand to ``64``.
 
- When unset generated installers will default installing to
- ``ProgramFiles<64>Folder``.
+ When unset generated installers will install to
+ ``LocalAppDataFolder`` if :variable:`CPACK_WIX_INSTALL_SCOPE` is ``perUser``,
+ and to ``ProgramFiles<64>Folder`` otherwise.
 
 .. variable:: CPACK_WIX_ROOT
 
@@ -427,7 +428,7 @@ Windows using WiX.
  for using WiX extensions. Each declaration should be in the form name=url, where
  name is the plain namespace without the usual xmlns: prefix and url is an unquoted
  namespace url. A list of commonly known WiX schemata can be found here:
- https://wixtoolset.org/docs/v3/xsd/
+ https://docs.firegiant.com/wix3/xsd/
 
 .. variable:: CPACK_WIX_SKIP_WIX_UI_EXTENSION
 
@@ -451,7 +452,7 @@ Windows using WiX.
  .. versionadded:: 3.29
 
  This variable can be optionally set to specify the ``InstallScope``
- of the installer:
+ of the installer (see https://docs.firegiant.com/wix3/xsd/wix/package/):
 
  ``perMachine``
    Create an installer that installs for all users and requires
@@ -461,7 +462,20 @@ Windows using WiX.
    This is the default.  See policy :policy:`CMP0172`.
 
  ``perUser``
-   Not yet supported. This is reserved for future use.
+   Create an installer that installs only for the current user
+   and does not require administrative privileges. Start menu entries created
+   by the installer are visible only to the current user.
+
+   To enable per-user installation, the installer has to generate some
+   additional registry entries to serve as "key paths" for installed
+   components (see https://learn.microsoft.com/en-us/windows/win32/msi/ice38).
+   These registry entries are created under ``HKEY_CURRENT_USER``, using the
+   path specified by the :variable:`CPACK_WIX_COMPONENT_KEYS_REGISTRY_PATH`
+   variable.
+
+   .. versionchanged:: 4.3
+
+     Before CMake 4.3, this value was reserved for future use and not supported.
 
  ``NONE``
    Create an installer without any ``InstallScope`` attribute.
@@ -477,13 +491,37 @@ Windows using WiX.
      but the start menu entry and uninstaller registration are created only
      for the current user.
 
-   .. warning::
+ .. warning::
+   Installations performed by installers created with different
+   ``InstallScope`` values cannot be cleanly updated or replaced by each other.
+   For example, to transition a project's installers from ``NONE`` to
+   ``perMachine``, or from ``perMachine`` to ``perUser``, the latter installer
+   should be distributed with instructions to first manually uninstall
+   any older version.
 
-     An installation performed by an installer created without any
-     ``InstallScope`` cannot be cleanly updated or replaced by an
-     installer with an ``InstallScope``.  In order to transition
-     a project's installers from ``NONE`` to ``perMachine``, the
-     latter installer should be distributed with instructions to
-     first manually uninstall any older version.
+.. variable:: CPACK_WIX_COMPONENT_KEYS_REGISTRY_PATH
 
- See https://wixtoolset.org/docs/v3/xsd/wix/package/
+ .. versionadded:: 4.3
+
+ This variable determines the registry path under ``HKEY_CURRENT_USER``
+ where the installer will create registry entries to serve as "key paths"
+ for components if :variable:`CPACK_WIX_INSTALL_SCOPE` is set to ``perUser``.
+
+ Use forward slashes (``/``) as path separators to avoid issues with escapes;
+ they will be converted to backslashes (``\``) by the WIX generator.
+
+ Default value is ``Software/<Vendor>/<PackageName>/Components``,
+ where ``<Vendor>`` is taken from :variable:`CPACK_PACKAGE_VENDOR`,
+ and ``<PackageName>`` is taken from :variable:`CPACK_PACKAGE_NAME`.
+
+ Example: ``Software/MyCompany/MyProduct/Components``
+
+.. variable:: CPACK_WIX_CAB_PER_COMPONENT
+
+ .. versionadded:: 4.2
+
+ If this variable is set to true one ``.cab`` file per component is created.
+ The default is to create a single ``.cab`` file for all files in the installer.
+
+ WiX creates ``.cab`` files in parallel so multiple ``.cab`` files may be
+ desirable for faster packaging.

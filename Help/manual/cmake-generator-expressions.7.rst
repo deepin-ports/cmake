@@ -115,6 +115,17 @@ using an alternate generator expression:
     VERBATIM
   )
 
+For tools that expect ``-I``'s value to be a separate argument, use the
+semicolon trick learned earlier:
+
+.. code-block:: cmake
+
+  add_custom_target(run_some_tool
+    COMMAND some_tool "$<LIST:TRANSFORM,$<TARGET_PROPERTY:tgt,INCLUDE_DIRECTORIES>,PREPEND,-I;>"
+    COMMAND_EXPAND_LISTS
+    VERBATIM
+  )
+
 A common mistake is to try to split a generator expression across multiple
 lines with indenting:
 
@@ -273,20 +284,8 @@ This section covers the primary and most widely used comparison types.
 Other more specific comparison types are documented in their own separate
 sections further below.
 
-String Comparisons
-^^^^^^^^^^^^^^^^^^
-
-.. genex:: $<STREQUAL:string1,string2>
-
-  ``1`` if ``string1`` and ``string2`` are equal, else ``0``.
-  The comparison is case-sensitive.  For a case-insensitive comparison,
-  combine with a :ref:`string transforming generator expression
-  <String Transforming Generator Expressions>`.  For example, the following
-  evaluates to ``1`` if ``${foo}`` is any of ``BAR``, ``Bar``, ``bar``, etc.
-
-  .. code-block:: cmake
-
-    $<STREQUAL:$<UPPER_CASE:${foo}>,BAR>
+Numeric Comparisons
+^^^^^^^^^^^^^^^^^^^
 
 .. genex:: $<EQUAL:value1,value2>
 
@@ -319,10 +318,401 @@ Version Comparisons
 
   ``1`` if ``v1`` is a version greater than or equal to ``v2``, else ``0``.
 
+String Expressions
+------------------
+
+Most of the expressions in this section are closely associated with the
+:command:`string` command, providing the same capabilities, but in
+the form of a generator expression.
+
+In each of the following string-related generator expressions, the ``string``
+must not contain any commas if that generator expression expects something to
+be provided after the ``string``.  For example, the expression
+``$<STRING:FIND,string,value>`` requires a ``value`` after the ``string``.
+Since a comma is used to separate the ``string`` and the ``value``, the
+``string`` cannot itself contain a comma.  This restriction does not apply to
+the :command:`string` command, it is specific to the string-handling generator
+expressions only. The :genex:`$<COMMA>` generator expression can be used to
+specify a comma as part of the arguments of the string-related generator
+expressions.
+
+.. _`String Comparisons Generator Expressions`:
+
+String Comparisons
+^^^^^^^^^^^^^^^^^^
+
+The comparisons are case-sensitive.  For a case-insensitive comparison,
+combine with a :ref:`string transforming generator expression
+<String Transforming Generator Expressions>`.  For example, the following
+evaluates to ``1`` if ``${foo}`` is any of ``BAR``, ``Bar``, ``bar``, etc.
+
+  .. code-block:: cmake
+
+    $<STREQUAL:$<STRING:TOUPPER,${foo}>,BAR>
+
+.. genex:: $<STREQUAL:string1,string2>
+
+  ``1`` if ``string1`` and ``string2`` are lexicographically equal, else ``0``.
+
+.. genex:: $<STRLESS:string1,string2>
+
+  .. versionadded:: 4.3
+
+  ``1`` if ``string1`` is lexicographically less than ``string2``, else ``0``.
+
+.. genex:: $<STRGREATER:string1,string2>
+
+  .. versionadded:: 4.3
+
+  ``1`` if ``string1`` is lexicographically greater than ``string2``, else
+  ``0``.
+
+.. genex:: $<STRLESS_EQUAL:string1,string2>
+
+  .. versionadded:: 4.3
+
+  ``1`` if ``string1`` is lexicographically less than or equal to ``string2``,
+  else ``0``.
+
+.. genex:: $<STRGREATER_EQUAL:string1,string2>
+
+  .. versionadded:: 4.3
+
+  ``1`` if ``string1`` is lexicographically greater than or equal to
+  ``string2``, else ``0``.
+
+.. _`String Queries Generator Expressions`:
+
+String Queries
+^^^^^^^^^^^^^^
+
+.. genex:: $<STRING:LENGTH,string>
+
+  .. versionadded:: 4.3
+
+  The given string's length in bytes. Note that this means, if ``string``
+  contains multi-byte characters, the result will *not* be the number of
+  characters.
+
+.. genex:: $<STRING:SUBSTRING,string,begin,length>
+
+  .. versionadded:: 4.3
+
+  The substring of the given ``string``. If ``length`` is ``-1`` or greater
+  than the ``string`` length the remainder of the string starting at ``begin``
+  will be returned.
+
+  Both ``begin`` and ``length`` are counted in bytes, so care must
+  be exercised if ``string`` could contain multi-byte characters.
+
+.. genex:: $<STRING:FIND,string[,FROM:(BEGIN|END)],substring>
+
+  .. versionadded:: 4.3
+
+  The position where the given ``substring`` was found in the supplied
+  ``string``. If the ``substring`` is not found, a position of -1 is returned.
+
+  The ``FROM:`` option defines how the search will be done:
+
+  ``BEGIN``
+    The search will start at the beginning of the ``string``. This the default.
+
+  ``END``
+    The search will start from the end of the ``string``.
+
+  The ``$<STRING:FIND>`` generator expression treats all strings as ASCII-only
+  characters. The index returned will also be counted in bytes, so strings
+  containing multi-byte characters may lead to unexpected results.
+
+.. genex:: $<STRING:MATCH,string[,SEEK:(ONCE|ALL)],regular_expression>
+
+  .. versionadded:: 4.3
+
+  Match, in the ``string``, the ``regular_expression``.
+
+  The ``SEEK:`` option specifies the match behavior:
+
+  ``ONCE``
+    Match only the first occurrence. This is the default.
+
+  ``ALL``
+    Match as many times as possible and return the matches as a list.
+
+  See the :ref:`Regular expressions specification <Regex Specification>` for
+  the syntax of the ``regular_expression`` parameter.
+
+.. _`String Generating Generator Expressions`:
+
+String Generations
+^^^^^^^^^^^^^^^^^^
+
+.. genex:: $<STRING:JOIN,glue,input[,input]...>
+
+  .. versionadded:: 4.3
+
+  Join all the ``input`` arguments together using the ``glue`` string.
+
+.. genex:: $<STRING:ASCII,number[,number]...>
+
+  .. versionadded:: 4.3
+
+  Convert all numbers, in the range 1-255, into corresponding ASCII
+  characters. Any number outside this range will raise an error.
+
+.. genex:: $<STRING:TIMESTAMP[,(UTC|format)]...>
+
+  .. versionadded:: 4.3
+
+  Produce a string representation of the current date and/or time.
+
+  If the generator expression is unable to obtain a timestamp, the result will
+  be the empty string ``""``.
+
+  The optional ``UTC`` flag requests the current date/time representation to
+  be in Coordinated Universal Time (UTC) rather than local time.
+
+  If the ``SOURCE_DATE_EPOCH`` environment variable is set, its value will be
+  used instead of the current time.
+  See https://reproducible-builds.org/specs/source-date-epoch/ for details.
+
+  The optional ``<format>`` may contain the following format specifiers:
+
+  ``%%``
+    A literal percent sign (%).
+
+  ``%d``
+    The day of the current month (01-31).
+
+  ``%H``
+    The hour on a 24-hour clock (00-23).
+
+  ``%I``
+    The hour on a 12-hour clock (01-12).
+
+  ``%j``
+    The day of the current year (001-366).
+
+  ``%m``
+    The month of the current year (01-12).
+
+  ``%b``
+    Abbreviated month name (e.g. Oct).
+
+  ``%B``
+    Full month name (e.g. October).
+
+  ``%M``
+    The minute of the current hour (00-59).
+
+  ``%s``
+    Seconds since midnight (UTC) 1-Jan-1970 (UNIX time).
+
+  ``%S``
+    The second of the current minute.  60 represents a leap second. (00-60)
+
+  ``%f``
+    The microsecond of the current second (000000-999999).
+
+  ``%U``
+    The week number of the current year (00-53).
+
+  ``%V``
+    The ISO 8601 week number of the current year (01-53).
+
+  ``%w``
+    The day of the current week. 0 is Sunday. (0-6)
+
+  ``%a``
+    Abbreviated weekday name (e.g. Fri).
+
+  ``%A``
+    Full weekday name (e.g. Friday).
+
+  ``%y``
+    The last two digits of the current year (00-99).
+
+  ``%Y``
+    The current year.
+
+  ``%z``
+    The offset of the time zone from UTC, in hours and minutes,
+    with format ``+hhmm`` or ``-hhmm``.
+
+  ``%Z``
+    The time zone name.
+
+  Unknown format specifiers will be ignored and copied to the output
+  as-is.
+
+  If no explicit ``format`` is given, it will default to:
+
+  * ``%Y-%m-%dT%H:%M:%S`` for local time.
+  * ``%Y-%m-%dT%H:%M:%SZ`` for UTC.
+
+.. genex:: $<STRING:RANDOM[,(LENGTH:length|ALPHABET:alphabet|RANDOM_SEED:seed)]...>
+
+  .. versionadded:: 4.3
+
+  Produce a random string of ASCII characters. The possible options are:
+
+  ``LENGTH:length``
+    Define the length of the string. The default length is 5 characters.
+
+  ``ALPHABET:alphabet``
+    Define the characters used for the generation. The alphabet is always
+    interpreted as holding ASCII characters. The default alphabet is all
+    numbers and upper and lower case letters.
+
+  ``RANDOM_SEED:seed``
+    Specify an integer which will be used to seed the random number generator.
+
+.. genex:: $<STRING:UUID,NAMESPACE:namespace,TYPE:(MD5|SHA1)[,NAME:name][,CASE:(LOWER|UPPER)]>
+
+  .. versionadded:: 4.3
+
+  Create a universally unique identifier (aka GUID) as per RFC4122.
+  A UUID has the format ``xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx``
+  where each ``x`` represents an hexadecimal character.
+
+  The UUID is based on the hash of the combined values of:
+
+  ``NAMESPACE:namespace``
+    ``namespace`` which has to be a valid UUID.
+
+  ``NAME:name``
+    ``name`` is an arbitrary string.
+
+  ``TYPE:``
+    The hash algorithm can be either:
+
+    ``MD5``
+      Version 3 UUID.
+
+    ``SHA1``
+      Version 5 UUID.
+
+  ``CASE:``
+    Specify the case of the hexadecimal characters.
+
+    ``LOWER``
+      Hexadecimal characters are all of lowercase. This is the default.
+
+    ``UPPER``
+      Hexadecimal characters are all of uppercase.
+
 .. _`String Transforming Generator Expressions`:
 
 String Transformations
-----------------------
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. genex:: $<STRING:REPLACE[,(STRING|REGEX)],string,match_string,replace_string>
+
+  .. versionadded:: 4.3
+
+  Replace all occurrences of ``match_string`` in the ``string`` with
+  ``replace_string``.
+
+  The ``match_string`` can be of two different types:
+
+  ``STRING``
+    ``match_string`` is a literal string and match will be done by simple
+    string comparison. This is the default.
+
+  ``REGEX``
+    ``match_string`` is a regular expression. Match this regular_expression as
+    many times as possible and substitute the ``replace_string`` for the match
+    in the ``string``.
+
+    The ``replace_string`` may refer to parenthesis-delimited subexpressions of
+    the match using \\1, \\2, ..., \\9. Note that two backslashes (\\\\1) are
+    required in CMake code to get a backslash through argument parsing.
+
+.. genex:: $<STRING:APPEND,string,input[,input]...>
+
+  .. versionadded:: 4.3
+
+  Append all the ``input`` arguments to the ``string``.
+
+.. genex:: $<STRING:PREPEND,string,input[,input]...>
+
+  .. versionadded:: 4.3
+
+  Prepend all the ``input`` arguments to the ``string``.
+
+.. genex:: $<STRING:TOLOWER,string>
+
+  .. versionadded:: 4.3
+
+  Content of ``string`` converted to lower case.
+
+.. genex:: $<STRING:TOUPPER,string>
+
+  .. versionadded:: 4.3
+
+  Content of ``string`` converted to upper case.
+
+.. genex:: $<STRING:STRIP,SPACES,string>
+
+  .. versionadded:: 4.3
+
+  Remove the specified elements from the ``string``. The possible options are:
+
+  ``SPACES``
+    Remove the leading and trailing spaces of the ``string``.
+
+.. genex:: $<STRING:QUOTE,REGEX,string>
+
+  .. versionadded:: 4.3
+
+  Escape the specified elements of the ``string``. The possible options are:
+
+  ``REGEX``
+    Escape all characters that have special meaning in a regular expressions,
+    such that the ``string`` can be used as part of a regular expression to
+    match the input literally.
+
+.. genex:: $<STRING:HEX,string>
+
+  .. versionadded:: 4.3
+
+  Convert each byte in the ``string`` to its hexadecimal representation.
+  Letters in the result (a through f) are in lowercase.
+
+.. genex:: $<STRING:HASH,string,ALGORITHM:algorithm>
+
+  .. versionadded:: 4.3
+
+  Compute a cryptographic hash of the ``string``. The supported algorithm
+  names, as specified by the ``ALGORITHM:`` option are:
+
+  ``MD5``
+    Message-Digest Algorithm 5, RFC 1321.
+  ``SHA1``
+    US Secure Hash Algorithm 1, RFC 3174.
+  ``SHA224``
+    US Secure Hash Algorithms, RFC 4634.
+  ``SHA256``
+    US Secure Hash Algorithms, RFC 4634.
+  ``SHA384``
+    US Secure Hash Algorithms, RFC 4634.
+  ``SHA512``
+    US Secure Hash Algorithms, RFC 4634.
+  ``SHA3_224``
+    Keccak SHA-3.
+  ``SHA3_256``
+    Keccak SHA-3.
+  ``SHA3_384``
+    Keccak SHA-3.
+  ``SHA3_512``
+    Keccak SHA-3.
+
+.. genex:: $<STRING:MAKE_C_IDENTIFIER,string>
+
+  .. versionadded:: 4.3
+
+  Convert each non-alphanumeric character in the ``string`` to an underscore.
+  If the first character of the ``string`` is a digit, an underscore will also
+  be prepended.
 
 .. genex:: $<LOWER_CASE:string>
 
@@ -332,10 +722,10 @@ String Transformations
 
   Content of ``string`` converted to upper case.
 
-.. genex:: $<MAKE_C_IDENTIFIER:...>
+.. genex:: $<MAKE_C_IDENTIFIER:string>
 
-  Content of ``...`` converted to a C identifier.  The conversion follows the
-  same behavior as :command:`string(MAKE_C_IDENTIFIER)`.
+  Content of ``string`` converted to a C identifier.  The conversion follows
+  the same behavior as :command:`string(MAKE_C_IDENTIFIER)`.
 
 List Expressions
 ----------------
@@ -532,6 +922,11 @@ List Transformations
 
         $<LIST:TRANSFORM,list,REPLACE,regular_expression,replace_expression[,SELECTOR]>
 
+      .. versionchanged:: 4.1
+        The ``^`` anchor now matches only at the beginning of the input
+        element instead of the beginning of each repeated search.
+        See policy :policy:`CMP0186`.
+
   ``SELECTOR`` determines which items of the list will be transformed.
   Only one type of selector can be specified at a time. When given,
   ``SELECTOR`` must be one of the following:
@@ -563,10 +958,10 @@ List Transformations
 
   Joins the ``list`` with the content of the ``glue`` string inserted between
   each item.  This is conceptually the same operation as
-  :ref:`$\<LIST:JOIN,list,glue\> <GenEx LIST-JOIN>`, but the two have
+  :cref:`$\<LIST:JOIN,list,glue\> <GenEx LIST-JOIN>`, but the two have
   different behavior with regard to empty items.
-  :ref:`$\<LIST:JOIN,list,glue\> <GenEx LIST-JOIN>` preserves all empty items,
-  whereas ``$<JOIN,list,glue>`` drops all empty items from the list.
+  :cref:`$\<LIST:JOIN,list,glue\> <GenEx LIST-JOIN>` preserves all empty items,
+  whereas ``$<JOIN:list,glue>`` drops all empty items from the list.
 
 .. genex:: $<REMOVE_DUPLICATES:list>
 
@@ -575,7 +970,7 @@ List Transformations
   Removes duplicated items in the given ``list``. The relative order of items
   is preserved, and if duplicates are encountered, only the first instance is
   retained.  The result is the same as
-  :ref:`$\<LIST:REMOVE_DUPLICATES,list\> <GenEx LIST-REMOVE_DUPLICATES>`.
+  :cref:`$\<LIST:REMOVE_DUPLICATES,list\> <GenEx LIST-REMOVE_DUPLICATES>`.
 
 .. genex:: $<FILTER:list,INCLUDE|EXCLUDE,regex>
 
@@ -583,7 +978,7 @@ List Transformations
 
   Includes or removes items from ``list`` that match the regular expression
   ``regex``.  The result is the same as
-  :ref:`$\<LIST:FILTER,list,INCLUDE|EXCLUDE,regex\> <GenEx LIST-FILTER>`.
+  :cref:`$\<LIST:FILTER,list,INCLUDE|EXCLUDE,regex\> <GenEx LIST-FILTER>`.
 
 .. _GenEx List Ordering:
 
@@ -655,7 +1050,7 @@ Most of the expressions in this section are closely associated with the
 the form of a generator expression.
 
 For all generator expressions in this section, paths are expected to be in
-cmake-style format. The :ref:`$\<PATH:CMAKE_PATH\> <GenEx PATH-CMAKE_PATH>`
+cmake-style format. The :cref:`$\<PATH:CMAKE_PATH\> <GenEx PATH-CMAKE_PATH>`
 generator expression can be used to convert a native path to a cmake-style
 one.
 
@@ -672,7 +1067,7 @@ Path Comparisons
   performed on either path. Returns ``1`` if the paths are equal, ``0``
   otherwise.
 
-  See :ref:`cmake_path(COMPARE) <Path COMPARE>` for more details.
+  See :ref:`cmake_path(COMPARE) <Path Comparison>` for more details.
 
 .. _GenEx Path Queries:
 
@@ -691,7 +1086,7 @@ All paths are expected to be in cmake-style format.
   present, ``0`` otherwise. See :ref:`Path Structure And Terminology` for the
   meaning of each path component.
 
-  ::
+  .. code-block:: cmake
 
     $<PATH:HAS_ROOT_NAME,path>
     $<PATH:HAS_ROOT_DIRECTORY,path>
@@ -715,13 +1110,15 @@ All paths are expected to be in cmake-style format.
 
   .. versionadded:: 3.24
 
-  Returns ``1`` if the path is :ref:`absolute <IS_ABSOLUTE>`, ``0`` otherwise.
+  Returns ``1`` if the path is absolute according to
+  :command:`cmake_path(IS_ABSOLUTE)`, ``0`` otherwise.
 
 .. genex:: $<PATH:IS_RELATIVE,path>
 
   .. versionadded:: 3.24
 
-  This will return the opposite of ``IS_ABSOLUTE``.
+  Returns ``1`` if the path is relative according to
+  :command:`cmake_path(IS_RELATIVE)`, ``0`` otherwise.
 
 .. genex:: $<PATH:IS_PREFIX[,NORMALIZE],path,input>
 
@@ -753,7 +1150,7 @@ command.  All paths are expected to be in cmake-style format.
     All operations now accept a list of paths as argument. When a list of paths
     is specified, the operation will be applied to each path.
 
-  ::
+  .. code-block:: cmake
 
     $<PATH:GET_ROOT_NAME,path...>
     $<PATH:GET_ROOT_DIRECTORY,path...>
@@ -795,6 +1192,16 @@ in cmake-style format.
   When the ``NORMALIZE`` option is specified, the path is :ref:`normalized
   <Normalization>` after the conversion.
 
+.. genex:: $<PATH:NATIVE_PATH[,NORMALIZE],path...>
+
+  .. versionadded:: 4.0
+
+  Returns ``path`` converted into a native format with platform-specific
+  slashes (``\`` on Windows hosts and ``/`` elsewhere).
+
+  When the ``NORMALIZE`` option is specified, the path is :ref:`normalized
+  <Normalization>` before the conversion.
+
 .. genex:: $<PATH:APPEND,path...,input,...>
 
   .. versionadded:: 3.24
@@ -803,7 +1210,7 @@ in cmake-style format.
   ``directory-separator``. Depending on the ``input``, the value of ``path``
   may be discarded.
 
-  See :ref:`cmake_path(APPEND) <APPEND>` for more details.
+  See :command:`cmake_path(APPEND)` for more details.
 
 .. genex:: $<PATH:REMOVE_FILENAME,path...>
 
@@ -813,7 +1220,7 @@ in cmake-style format.
   ``$<PATH:GET_FILENAME>``) removed. After removal, any trailing
   ``directory-separator`` is left alone, if present.
 
-  See :ref:`cmake_path(REMOVE_FILENAME) <REMOVE_FILENAME>` for more details.
+  See :command:`cmake_path(REMOVE_FILENAME)` for more details.
 
 .. genex:: $<PATH:REPLACE_FILENAME,path...,input>
 
@@ -823,7 +1230,7 @@ in cmake-style format.
   ``path`` has no filename component (i.e. ``$<PATH:HAS_FILENAME>`` returns
   ``0``), ``path`` is unchanged.
 
-  See :ref:`cmake_path(REPLACE_FILENAME) <REPLACE_FILENAME>` for more details.
+  See :command:`cmake_path(REPLACE_FILENAME)` for more details.
 
 .. genex:: $<PATH:REMOVE_EXTENSION[,LAST_ONLY],path...>
 
@@ -831,7 +1238,7 @@ in cmake-style format.
 
   Returns ``path`` with the :ref:`extension <EXTENSION_DEF>` removed, if any.
 
-  See :ref:`cmake_path(REMOVE_EXTENSION) <REMOVE_EXTENSION>` for more details.
+  See :command:`cmake_path(REMOVE_EXTENSION)` for more details.
 
 .. genex:: $<PATH:REPLACE_EXTENSION[,LAST_ONLY],path...,input>
 
@@ -840,7 +1247,7 @@ in cmake-style format.
   Returns ``path`` with the :ref:`extension <EXTENSION_DEF>` replaced by
   ``input``, if any.
 
-  See :ref:`cmake_path(REPLACE_EXTENSION) <REPLACE_EXTENSION>` for more details.
+  See :command:`cmake_path(REPLACE_EXTENSION)` for more details.
 
 .. genex:: $<PATH:NORMAL_PATH,path...>
 
@@ -856,8 +1263,7 @@ in cmake-style format.
   Returns ``path``, modified to make it relative to the ``base_directory``
   argument.
 
-  See :ref:`cmake_path(RELATIVE_PATH) <cmake_path-RELATIVE_PATH>` for more
-  details.
+  See :command:`cmake_path(RELATIVE_PATH)` for more details.
 
 .. genex:: $<PATH:ABSOLUTE_PATH[,NORMALIZE],path...,base_directory>
 
@@ -870,7 +1276,7 @@ in cmake-style format.
   When the ``NORMALIZE`` option is specified, the path is
   :ref:`normalized <Normalization>` after the path computation.
 
-  See :ref:`cmake_path(ABSOLUTE_PATH) <ABSOLUTE_PATH>` for more details.
+  See :command:`cmake_path(ABSOLUTE_PATH)` for more details.
 
 Shell Paths
 ^^^^^^^^^^^
@@ -1273,14 +1679,12 @@ related to most of the expressions in this sub-section.
   .. versionadded:: 3.3
 
   The compile language of source files when evaluating compile options.
-  See :ref:`the related boolean expression
-  <Boolean COMPILE_LANGUAGE Generator Expression>`
-  ``$<COMPILE_LANGUAGE:language>``
+  See the related boolean expression
+  :genex:`$<COMPILE_LANGUAGE:languages> <COMPILE_LANGUAGE:languages>`
   for notes about the portability of this generator expression.
 
-.. _`Boolean COMPILE_LANGUAGE Generator Expression`:
-
 .. genex:: $<COMPILE_LANGUAGE:languages>
+  :target: COMPILE_LANGUAGE:languages
 
   .. versionadded:: 3.3
 
@@ -1405,10 +1809,10 @@ Compile Context
   linking requirements (e.g., all-``inline`` or C++ template libraries).
 
   Note that for proper evaluation of this expression requires policy :policy:`CMP0099`
-  to be set to `NEW`.
+  to be set to ``NEW``.
 
-Linker Language And ID
-^^^^^^^^^^^^^^^^^^^^^^
+Link Language and ID
+^^^^^^^^^^^^^^^^^^^^
 
 .. genex:: $<LINK_LANGUAGE>
 
@@ -1558,7 +1962,7 @@ Link Features
   underscores.  Feature names defined in all uppercase are reserved for CMake's
   own built-in features.  The pre-defined built-in library features are:
 
-  .. include:: ../variable/LINK_LIBRARY_PREDEFINED_FEATURES.txt
+  .. include:: ../variable/include/LINK_LIBRARY_PREDEFINED_FEATURES.rst
 
   Built-in and custom library features are defined in terms of the following
   variables:
@@ -1650,7 +2054,7 @@ Link Features
   own built-in features.  Currently, there is only one pre-defined built-in
   group feature:
 
-  .. include:: ../variable/LINK_GROUP_PREDEFINED_FEATURES.txt
+  .. include:: ../variable/include/LINK_GROUP_PREDEFINED_FEATURES.rst
 
   Built-in and custom group features are defined in terms of the following
   variables:
@@ -1814,6 +2218,338 @@ Link Context
   (see :genex:`$<DEVICE_LINK:list>` generator expression). This expression can
   only be used to specify link options.
 
+Linker ID and Frontend-Variant
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+See also the :variable:`CMAKE_<LANG>_COMPILER_LINKER_ID` and
+:variable:`CMAKE_<LANG>_COMPILER_LINKER_FRONTEND_VARIANT` variables, which are
+closely related to most of the expressions in this sub-section.
+
+.. genex:: $<C_COMPILER_LINKER_ID>
+
+  .. versionadded:: 4.2
+
+  CMake's linker id of the C linker used.
+
+.. genex:: $<C_COMPILER_LINKER_ID:linker_ids>
+
+  .. versionadded:: 4.2
+
+  where ``linker_ids`` is a comma-separated list.
+  ``1`` if CMake's linker id of the C linker matches any one
+  of the entries in ``linker_ids``, otherwise ``0``.
+
+.. genex:: $<CXX_COMPILER_LINKER_ID>
+
+  .. versionadded:: 4.2
+
+  CMake's linker id of the C++ linker used.
+
+.. genex:: $<CXX_COMPILER_LINKER_ID:linker_ids>
+
+  .. versionadded:: 4.2
+
+  where ``linker_ids`` is a comma-separated list.
+  ``1`` if CMake's linker id of the C++ linker matches any one
+  of the entries in ``linker_ids``, otherwise ``0``.
+
+.. genex:: $<CUDA_COMPILER_LINKER_ID>
+
+  .. versionadded:: 4.2
+
+  CMake's linker id of the CUDA linker used.
+
+.. genex:: $<CUDA_COMPILER_LINKER_ID:linker_ids>
+
+  .. versionadded:: 4.2
+
+  where ``linker_ids`` is a comma-separated list.
+  ``1`` if CMake's linker id of the CUDA linker matches any one
+  of the entries in ``linker_ids``, otherwise ``0``.
+
+.. genex:: $<OBJC_COMPILER_LINKER_ID>
+
+  .. versionadded:: 4.2
+
+  CMake's linker id of the Objective-C linker used.
+
+.. genex:: $<OBJC_COMPILER_LINKER_ID:linker_ids>
+
+  .. versionadded:: 4.2
+
+  where ``linker_ids`` is a comma-separated list.
+  ``1`` if CMake's linker id of the Objective-C linker matches any one
+  of the entries in ``linker_ids``, otherwise ``0``.
+
+.. genex:: $<OBJCXX_COMPILER_LINKER_ID>
+
+  .. versionadded:: 4.2
+
+  CMake's linker id of the Objective-C++ linker used.
+
+.. genex:: $<OBJCXX_COMPILER_LINKER_ID:linker_ids>
+
+  .. versionadded:: 4.2
+
+  where ``linker_ids`` is a comma-separated list.
+  ``1`` if CMake's linker id of the Objective-C++ linker matches any one
+  of the entries in ``linker_ids``, otherwise ``0``.
+
+.. genex:: $<Fortran_COMPILER_LINKER_ID>
+
+  .. versionadded:: 4.2
+
+  CMake's linker id of the Fortran linker used.
+
+.. genex:: $<Fortran_COMPILER_LINKER_ID:linker_ids>
+
+  .. versionadded:: 4.2
+
+  where ``linker_ids`` is a comma-separated list.
+  ``1`` if CMake's linker id of the Fortran linker matches any one
+  of the entries in ``linker_ids``, otherwise ``0``.
+
+.. genex:: $<HIP_COMPILER_LINKER_ID>
+
+  .. versionadded:: 4.2
+
+  CMake's linker id of the HIP linker used.
+
+.. genex:: $<HIP_COMPILER_LINKER_ID:linker_ids>
+
+  .. versionadded:: 4.2
+
+  where ``linker_ids`` is a comma-separated list.
+  ``1`` if CMake's linker id of the HIP linker matches any one
+  of the entries in ``linker_ids``, otherwise ``0``.
+
+.. genex:: $<C_COMPILER_LINKER_FRONTEND_VARIANT>
+
+  .. versionadded:: 4.2
+
+  CMake's linker frontend variant of the C linker used.
+
+.. genex:: $<C_COMPILER_LINKER_FRONTEND_VARIANT:variant_ids>
+
+  .. versionadded:: 4.2
+
+  where ``variant_ids`` is a comma-separated list.
+  ``1`` if CMake's linker frontend variant of the C linker matches any one
+  of the entries in ``variant_ids``, otherwise ``0``.
+
+.. genex:: $<CXX_COMPILER_LINKER_FRONTEND_VARIANT>
+
+  .. versionadded:: 4.2
+
+  CMake's linker frontend variant of the C++ linker used.
+
+.. genex:: $<CXX_COMPILER_LINKER_FRONTEND_VARIANT:variant_ids>
+
+  .. versionadded:: 4.2
+
+  where ``variant_ids`` is a comma-separated list.
+  ``1`` if CMake's linker frontend variant of the C++ linker matches any one
+  of the entries in ``variant_ids``, otherwise ``0``.
+
+.. genex:: $<CUDA_COMPILER_LINKER_FRONTEND_VARIANT>
+
+  .. versionadded:: 4.2
+
+  CMake's linker frontend variant of the CUDA linker used.
+
+.. genex:: $<CUDA_COMPILER_LINKER_FRONTEND_VARIANT:variant_ids>
+
+  .. versionadded:: 4.2
+
+  where ``variant_ids`` is a comma-separated list.
+  ``1`` if CMake's linker frontend variant of the CUDA linker matches any one
+  of the entries in ``variant_ids``, otherwise ``0``.
+
+.. genex:: $<OBJC_COMPILER_LINKER_FRONTEND_VARIANT>
+
+  .. versionadded:: 4.2
+
+  CMake's linker frontend variant of the Objective-C linker used.
+
+.. genex:: $<OBJC_COMPILER_LINKER_FRONTEND_VARIANT:variant_ids>
+
+  .. versionadded:: 4.2
+
+  where ``variant_ids`` is a comma-separated list.
+  ``1`` if CMake's linker frontend variant of the Objective-C linker matches
+  any one of the entries in ``variant_ids``, otherwise ``0``.
+
+.. genex:: $<OBJCXX_COMPILER_LINKER_FRONTEND_VARIANT>
+
+  .. versionadded:: 4.2
+
+  CMake's linker frontend variant of the Objective-C++ linker used.
+
+.. genex:: $<OBJCXX_COMPILER_LINKER_FRONTEND_VARIANT:variant_ids>
+
+  .. versionadded:: 4.2
+
+  where ``variant_ids`` is a comma-separated list.
+  ``1`` if CMake's linker frontend variant of the Objective-C++ linker matches
+  any one of the entries in ``variant_ids``, otherwise ``0``.
+
+.. genex:: $<Fortran_COMPILER_LINKER_FRONTEND_VARIANT>
+
+  .. versionadded:: 4.2
+
+  CMake's linker frontend variant of the Fortran linker used.
+
+.. genex:: $<Fortran_COMPILER_LINKER_FRONTEND_VARIANT:variant_ids>
+
+  .. versionadded:: 4.2
+
+  where ``variant_ids`` is a comma-separated list.
+  ``1`` if CMake's linker frontend variant of the Fortran linker matches
+  any one of the entries in ``variant_ids``, otherwise ``0``.
+
+.. genex:: $<HIP_COMPILER_LINKER_FRONTEND_VARIANT>
+
+  .. versionadded:: 4.2
+
+  CMake's linker frontend variant of the HIP linker used.
+
+.. genex:: $<HIP_COMPILER_LINKER_FRONTEND_VARIANT:variant_ids>
+
+  .. versionadded:: 4.2
+
+  where ``variant_ids`` is a comma-separated list.
+  ``1`` if CMake's linker frontend variant of the HIP linker matches
+  any one of the entries in ``variant_ids``, otherwise ``0``.
+
+
+.. _`Source-Dependent Expressions`:
+
+Source-Dependent Expressions
+----------------------------
+
+The source file, as specified in the following expressions, can be nonexistent
+on the file system (i.e. generated file) but must be known from CMake. A source
+file becomes known from CMake if it is part of some target (library or
+executable) or when a source file property is defined. Moreover, this
+information is specific to the directory where the declaration occurred.
+
+For example, these generator expressions enable to offer a uniform behavior,
+for the :command:`add_custom_command` and :command:`add_custom_target`
+commands, regarding the source properties:
+
+.. code-block:: cmake
+
+  function(custom_add_library target)
+    unset(sources)
+    foreach(source IN LISTS ARGN)
+      add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${source}.bin
+        COMMAND my-compiler -o ${CMAKE_CURRENT_BINARY_DIR}/${source}.bin
+                            "$<$<SOURCE_EXISTS:${source}>:$<SOURCE_PROPERTY:${source},COMPILE_OPTIONS>>"
+                            ${source})
+      list(APPEND sources ${CMAKE_CURRENT_BINARY_DIR}/${source}.bin)
+    endforeach()
+    add_custom_target(${target}
+                      DEPENDS ${sources})
+  endfunction()
+
+  custom_add_library(my-lib file1.x file2.x file3.x)
+  set_property(SOURCE file1.x PROPERTY COMPILE_OPTIONS -X)
+  set_property(SOURCE file2.x PROPERTY COMPILE_OPTIONS -Y)
+
+Source Meta-Data
+^^^^^^^^^^^^^^^^
+
+These expressions look up information about a source file.
+
+.. genex:: $<SOURCE_EXISTS:src[,(DIRECTORY:dir|TARGET_DIRECTORY:tgt)]>
+
+  .. versionadded:: 4.3
+
+  ``1`` if ``src`` exists as a CMake source file, else ``0``. By default, the
+  source file is searched in the scope of the current source directory or the
+  directory of the consuming target.
+
+  Directory scope can be overridden with one of the following sub-options:
+
+  ``DIRECTORY:dir``
+    The source file will be searched in the ``dir`` directory's scope.
+    CMake must know about the directory, either by having added  it through a
+    call to :command:`add_subdirectory` or ``dir`` being the top level
+    directory. Relative paths are treated as relative to the current source
+    directory.
+
+  ``TARGET_DIRECTORY:target``
+      The source file will be searched in the directory scope in which
+      ``target`` was created (``target`` must therefore exist).
+
+Source Properties
+^^^^^^^^^^^^^^^^^
+
+These expressions look up the values of
+:ref:`source file properties <Source File Properties>`.
+
+.. genex:: $<SOURCE_PROPERTY:src[,(DIRECTORY:dir|TARGET_DIRECTORY:target)],prop>
+
+  .. versionadded:: 4.3
+
+  Value of the property ``prop`` on the source file ``src``, or empty if
+  the property is not set. An error will be raised if the source file is not
+  known by CMake. By default, the source file's property will be read from the
+  current source directory's scope or the directory of the consuming target.
+
+  Directory scope can be overridden with one of the following sub-options:
+
+  ``DIRECTORY:dir``
+    The source file property will be read from the ``dir`` directory's scope.
+    CMake must know about the directory, either by having added  it through a
+    call to :command:`add_subdirectory` or ``dir`` being the top level
+    directory. Relative paths are treated as relative to the current source
+    directory.
+
+  ``TARGET_DIRECTORY:target``
+      The source file property will be read from the directory scope in which
+      ``target`` was created (``target`` must therefore exist).
+
+.. _`FileSet-Dependent Expressions`:
+
+FileSet-Dependent Expressions
+-----------------------------
+
+FileSet Meta-Data
+^^^^^^^^^^^^^^^^^
+
+These expressions look up information about a file set.
+
+.. genex:: $<FILE_SET_EXISTS:fileset,TARGET:target>
+
+  .. versionadded:: 4.3
+
+  ``1`` if the ``fileset`` exists as a CMake file set attached to the
+  ``target``, else ``0``.
+
+  The possible sub-options are:
+
+  ``TARGET:target``
+    The target on which the file set depends.
+
+FileSet Properties
+^^^^^^^^^^^^^^^^^^
+
+These expressions look up the values of file set properties.
+
+.. genex:: $<FILE_SET_PROPERTY:fileset,TARGET:target,prop>
+
+  .. versionadded:: 4.3
+
+  Value of the property ``prop`` on the file set ``fileset``, or empty if
+  the property is not set. An error will be raised if the file set is not
+  known by CMake.
+
+  The possible sub-options are:
+
+  ``TARGET:target``
+    The target on which the file set depends.
 
 .. _`Target-Dependent Expressions`:
 
@@ -1904,7 +2640,10 @@ The expressions have special evaluation rules for some properties:
     :prop_tgt:`INTERFACE_LINK_LIBRARIES` *including* entries guarded by the
     :genex:`LINK_ONLY` generator expression.  See policy :policy:`CMP0166`.
 
-  Evaluation of :prop_tgt:`LINK_LIBRARIES` itself is not transitive.
+  .. versionchanged:: 4.1
+
+    Evaluation of :prop_tgt:`LINK_LIBRARIES` itself is now transitive.
+    See policy :policy:`CMP0189`.
 
 :ref:`Target Usage Requirement Properties <Target Usage Requirements>`
   These evaluate as a :ref:`semicolon-separated list <CMake Language Lists>`
@@ -1921,7 +2660,10 @@ The expressions have special evaluation rules for some properties:
     *including* entries guarded by the :genex:`LINK_ONLY` generator expression.
     See policy :policy:`CMP0166`.
 
-  Evaluation of :prop_tgt:`INTERFACE_LINK_LIBRARIES` itself is not transitive.
+  .. versionchanged:: 4.1
+
+    Evaluation of :prop_tgt:`INTERFACE_LINK_LIBRARIES` itself is now
+    transitive.  See policy :policy:`CMP0189`.
 
 :ref:`Custom Transitive Properties`
   .. versionadded:: 3.30
@@ -2013,23 +2755,32 @@ In the following, the phrase "the ``tgt`` filename" means the name of the
   expression is evaluated on, unless the expression is being used in
   :command:`add_custom_command` or :command:`add_custom_target`.
 
-.. genex:: $<TARGET_FILE_BASE_NAME:tgt>
+.. genex:: $<TARGET_FILE_BASE_NAME:tgt[,POSTFIX:(INCLUDE|EXCLUDE)]>
 
   .. versionadded:: 3.15
 
+  .. versionadded:: 4.2
+    The ``POSTFIX`` option can be used to control the inclusion or not
+    of the :prop_tgt:`<CONFIG>_POSTFIX` target property value as part of the
+    base name. The default is ``POSTFIX:INCLUDE``.
+
   Base name of ``tgt``, i.e. ``$<TARGET_FILE_NAME:tgt>`` without prefix and
-  suffix.
-  For example, if the ``tgt`` filename is ``libbase.so``, the base name is ``base``.
+  suffix and, optionally, postfix.
+  For example, if the ``tgt`` filename is ``libbase_postfix.so``, the base name
+  is:
+
+    * ``base_postfix`` for ``$<TARGET_FILE_BASE_NAME:tgt>`` or
+      ``$<TARGET_FILE_BASE_NAME:tgt,POSTFIX:INCLUDE>``.
+    * ``base`` for ``$<TARGET_FILE_BASE_NAME:tgt,POSTFIX:EXCLUDE>``.
 
   See also the :prop_tgt:`OUTPUT_NAME`, :prop_tgt:`ARCHIVE_OUTPUT_NAME`,
   :prop_tgt:`LIBRARY_OUTPUT_NAME` and :prop_tgt:`RUNTIME_OUTPUT_NAME`
-  target properties and their configuration specific variants
+  target properties, their configuration-specific variants
   :prop_tgt:`OUTPUT_NAME_<CONFIG>`, :prop_tgt:`ARCHIVE_OUTPUT_NAME_<CONFIG>`,
   :prop_tgt:`LIBRARY_OUTPUT_NAME_<CONFIG>` and
-  :prop_tgt:`RUNTIME_OUTPUT_NAME_<CONFIG>`.
-
-  The :prop_tgt:`<CONFIG>_POSTFIX` and :prop_tgt:`DEBUG_POSTFIX` target
-  properties can also be considered.
+  :prop_tgt:`RUNTIME_OUTPUT_NAME_<CONFIG>`, and
+  the :prop_tgt:`<CONFIG>_POSTFIX` and :prop_tgt:`DEBUG_POSTFIX` target
+  properties.
 
   Note that ``tgt`` is not added as a dependency of the target this
   expression is evaluated on.
@@ -2082,20 +2833,30 @@ In the following, the phrase "the ``tgt`` filename" means the name of the
   This expands to an empty string when there is no import file associated
   with the target.
 
-.. genex:: $<TARGET_IMPORT_FILE_BASE_NAME:tgt>
+.. genex:: $<TARGET_IMPORT_FILE_BASE_NAME:tgt[,POSTFIX:(INCLUDE|EXCLUDE)]>
 
   .. versionadded:: 3.27
 
+  .. versionadded:: 4.2
+    The ``POSTFIX`` option can be used to control the inclusion or not
+    of the :prop_tgt:`<CONFIG>_POSTFIX` target property value as part of the
+    base name. The default is ``POSTFIX:INCLUDE``.
+
   Base name of the linker import file of the target ``tgt`` without prefix or
-  suffix. For example, if the target file name is ``libbase.tbd``, the base
-  name is ``base``.
+  suffix and, optionally, postfix.
+  For example, if the target file name is ``libbase_postfix.tbd``, the base
+  name is:
+
+    * ``base_postfix`` for ``$<TARGET_IMPORT_FILE_BASE_NAME:tgt>`` or
+      ``$<TARGET_IMPORT_FILE_BASE_NAME:tgt,POSTFIX:INCLUDE>``.
+    * ``base`` for ``$<TARGET_IMPORT_FILE_BASE_NAME:tgt,POSTFIX:EXCLUDE>``.
 
   See also the :prop_tgt:`OUTPUT_NAME` and :prop_tgt:`ARCHIVE_OUTPUT_NAME`
-  target properties and their configuration specific variants
-  :prop_tgt:`OUTPUT_NAME_<CONFIG>` and :prop_tgt:`ARCHIVE_OUTPUT_NAME_<CONFIG>`.
-
-  The :prop_tgt:`<CONFIG>_POSTFIX` and :prop_tgt:`DEBUG_POSTFIX` target
-  properties can also be considered.
+  target properties, their configuration-specific variants
+  :prop_tgt:`OUTPUT_NAME_<CONFIG>` and
+  :prop_tgt:`ARCHIVE_OUTPUT_NAME_<CONFIG>`, and
+  the :prop_tgt:`<CONFIG>_POSTFIX` and :prop_tgt:`DEBUG_POSTFIX` target
+  properties.
 
   Note that ``tgt`` is not added as a dependency of the target this
   expression is evaluated on.
@@ -2158,22 +2919,32 @@ In the following, the phrase "the ``tgt`` filename" means the name of the
   :genex:`$<TARGET_LINKER_IMPORT_FILE>` generator expressions, depending on the
   characteristics of the target and the platform.
 
-.. genex:: $<TARGET_LINKER_FILE_BASE_NAME:tgt>
+.. genex:: $<TARGET_LINKER_FILE_BASE_NAME:tgt[,POSTFIX:(INCLUDE|EXCLUDE)]>
 
   .. versionadded:: 3.15
 
+  .. versionadded:: 4.2
+    The ``POSTFIX`` option can be used to control the inclusion or not
+    of the :prop_tgt:`<CONFIG>_POSTFIX` target property value as part of the
+    base name. The default is ``POSTFIX:INCLUDE``.
+
   Base name of file used to link the target ``tgt``, i.e.
-  :genex:`$<TARGET_LINKER_FILE_NAME:tgt>` without prefix and suffix. For
-  example, if target file name is ``libbase.a``, the base name is ``base``.
+  :genex:`$<TARGET_LINKER_FILE_NAME:tgt>` without prefix and suffix, and,
+  optionally, postfix.
+  For example, if the target file name is ``libbase_postfix.a``, the base name
+  is:
+
+    * ``base_postfix`` for ``$<TARGET_LINKER_FILE_BASE_NAME:tgt>`` or
+      ``$<TARGET_LINKER_FILE_BASE_NAME:tgt,POSTFIX:INCLUDE>``.
+    * ``base`` for ``$<TARGET_LINKER_FILE_BASE_NAME:tgt,POSTFIX:EXCLUDE>``.
 
   See also the :prop_tgt:`OUTPUT_NAME`, :prop_tgt:`ARCHIVE_OUTPUT_NAME`,
-  and :prop_tgt:`LIBRARY_OUTPUT_NAME` target properties and their configuration
-  specific variants :prop_tgt:`OUTPUT_NAME_<CONFIG>`,
+  and :prop_tgt:`LIBRARY_OUTPUT_NAME` target properties, their
+  configuration-specific variants :prop_tgt:`OUTPUT_NAME_<CONFIG>`,
   :prop_tgt:`ARCHIVE_OUTPUT_NAME_<CONFIG>` and
-  :prop_tgt:`LIBRARY_OUTPUT_NAME_<CONFIG>`.
-
-  The :prop_tgt:`<CONFIG>_POSTFIX` and :prop_tgt:`DEBUG_POSTFIX` target
-  properties can also be considered.
+  :prop_tgt:`LIBRARY_OUTPUT_NAME_<CONFIG>`, and
+  the :prop_tgt:`<CONFIG>_POSTFIX` and :prop_tgt:`DEBUG_POSTFIX` target
+  properties.
 
   Note that ``tgt`` is not added as a dependency of the target this
   expression is evaluated on.
@@ -2227,22 +2998,33 @@ In the following, the phrase "the ``tgt`` filename" means the name of the
   ``tgt`` represents (``.a``, ``.so``, ``.dylib``). So, on DLL platforms, it
   will be an empty string.
 
-.. genex:: $<TARGET_LINKER_LIBRARY_FILE_BASE_NAME:tgt>
+.. genex:: $<TARGET_LINKER_LIBRARY_FILE_BASE_NAME:tgt[,POSTFIX:(INCLUDE|EXCLUDE)]>
 
   .. versionadded:: 3.27
 
+  .. versionadded:: 4.2
+    The ``POSTFIX`` option can be used to control the inclusion or not
+    of the :prop_tgt:`<CONFIG>_POSTFIX` target property value as part of the
+    base name. The default is ``POSTFIX:INCLUDE``.
+
   Base name of library file used to link the target ``tgt``, i.e.
-  :genex:`$<TARGET_LINKER_LIBRARY_FILE_NAME:tgt>` without prefix and suffix.
-  For example, if target file name is ``libbase.a``, the base name is ``base``.
+  :genex:`$<TARGET_LINKER_LIBRARY_FILE_NAME:tgt>` without prefix and
+  suffix,and, optionally, postfix.
+  For example, if the target file name is ``libbase_postfix.a``, the base name
+  is:
+
+    * ``base_postfix`` for ``$<TARGET_LINKER_LIBRARY_FILE_BASE_NAME:tgt>`` or
+      ``$<TARGET_LINKER_LIBRARY_FILE_BASE_NAME:tgt,POSTFIX:INCLUDE>``.
+    * ``base`` for
+      ``$<TARGET_LINKER_LIBRARY_FILE_BASE_NAME:tgt,POSTFIX:EXCLUDE>``.
 
   See also the :prop_tgt:`OUTPUT_NAME`, :prop_tgt:`ARCHIVE_OUTPUT_NAME`,
-  and :prop_tgt:`LIBRARY_OUTPUT_NAME` target properties and their configuration
-  specific variants :prop_tgt:`OUTPUT_NAME_<CONFIG>`,
+  and :prop_tgt:`LIBRARY_OUTPUT_NAME` target properties, their
+  configuration-specific variants :prop_tgt:`OUTPUT_NAME_<CONFIG>`,
   :prop_tgt:`ARCHIVE_OUTPUT_NAME_<CONFIG>` and
-  :prop_tgt:`LIBRARY_OUTPUT_NAME_<CONFIG>`.
-
-  The :prop_tgt:`<CONFIG>_POSTFIX` and :prop_tgt:`DEBUG_POSTFIX` target
-  properties can also be considered.
+  :prop_tgt:`LIBRARY_OUTPUT_NAME_<CONFIG>`, and
+  the :prop_tgt:`<CONFIG>_POSTFIX` and :prop_tgt:`DEBUG_POSTFIX` target
+  properties.
 
   Note that ``tgt`` is not added as a dependency of the target this
   expression is evaluated on.
@@ -2298,21 +3080,32 @@ In the following, the phrase "the ``tgt`` filename" means the name of the
   (``.lib``, ``.tbd``). So, when no import file is involved in the link step,
   an empty string is returned.
 
-.. genex:: $<TARGET_LINKER_IMPORT_FILE_BASE_NAME:tgt>
+.. genex:: $<TARGET_LINKER_IMPORT_FILE_BASE_NAME:tgt[,POSTFIX:(INCLUDE|EXCLUDE)]>
 
   .. versionadded:: 3.27
 
+  .. versionadded:: 4.2
+    The ``POSTFIX`` option can be used to control the inclusion or not
+    of the :prop_tgt:`<CONFIG>_POSTFIX` target property value as part of the
+    base name. The default is ``POSTFIX:INCLUDE``.
+
   Base name of the import file used to link the target ``tgt``, i.e.
-  :genex:`$<TARGET_LINKER_IMPORT_FILE_NAME:tgt>` without prefix and suffix.
-  For example, if target file name is ``libbase.tbd``, the base name is ``base``.
+  :genex:`$<TARGET_LINKER_IMPORT_FILE_NAME:tgt>` without prefix and suffix,
+  and, optionally, postfix.
+  For example, if the target file name is ``libbase_postfix.tbd``, the base
+  name is
+
+    * ``base_postfix`` for ``$<TARGET_LINKER_IMPORT_FILE_BASE_NAME:tgt>`` or
+      ``$<TARGET_LINKER_IMPORT_FILE_BASE_NAME:tgt,POSTFIX:INCLUDE>``.
+    * ``base`` for
+      ``$<TARGET_LINKER_IMPORT_FILE_BASE_NAME:tgt,POSTFIX:EXCLUDE>``.
 
   See also the :prop_tgt:`OUTPUT_NAME` and :prop_tgt:`ARCHIVE_OUTPUT_NAME`,
-  target properties and their configuration
-  specific variants :prop_tgt:`OUTPUT_NAME_<CONFIG>` and
-  :prop_tgt:`ARCHIVE_OUTPUT_NAME_<CONFIG>`.
-
-  The :prop_tgt:`<CONFIG>_POSTFIX` and :prop_tgt:`DEBUG_POSTFIX` target
-  properties can also be considered.
+  target properties, their configuration-specific variants
+  :prop_tgt:`OUTPUT_NAME_<CONFIG>` and
+  :prop_tgt:`ARCHIVE_OUTPUT_NAME_<CONFIG>`, and
+  the :prop_tgt:`<CONFIG>_POSTFIX` and :prop_tgt:`DEBUG_POSTFIX` target
+  properties.
 
   Note that ``tgt`` is not added as a dependency of the target this
   expression is evaluated on.
@@ -2408,26 +3201,46 @@ In the following, the phrase "the ``tgt`` filename" means the name of the
   Full path to the linker generated program database file (.pdb)
   where ``tgt`` is the name of a target.
 
+  .. versionchanged:: 4.2
+    The postfix, as specified by :prop_tgt:`DEBUG_POSTFIX` or
+    :prop_tgt:`<CONFIG>_POSTFIX` target properties, is always included in the
+    ``PDB`` file name. See the policy :policy:`CMP0202`.
+
   See also the :prop_tgt:`PDB_NAME` and :prop_tgt:`PDB_OUTPUT_DIRECTORY`
   target properties and their configuration specific variants
   :prop_tgt:`PDB_NAME_<CONFIG>` and :prop_tgt:`PDB_OUTPUT_DIRECTORY_<CONFIG>`.
 
-.. genex:: $<TARGET_PDB_FILE_BASE_NAME:tgt>
+.. genex:: $<TARGET_PDB_FILE_BASE_NAME:tgt[,POSTFIX:(INCLUDE|EXCLUDE)]>
 
   .. versionadded:: 3.15
 
   Base name of the linker generated program database file (.pdb)
   where ``tgt`` is the name of a target.
 
+  .. versionadded:: 4.2
+    The ``POSTFIX`` option can be used to control the inclusion or not
+    of the :prop_tgt:`<CONFIG>_POSTFIX` target property value as part of the
+    base name. The default is ``POSTFIX:INCLUDE``.
+
+  .. versionchanged:: 4.2
+    The postfix, as specified by :prop_tgt:`DEBUG_POSTFIX` or
+    :prop_tgt:`<CONFIG>_POSTFIX` target properties, is always included in the
+    ``PDB`` base name, except if the ``POSTFIX`` option has the value
+    ``EXCLUDE``.  See the policy :policy:`CMP0202`.
+
   The base name corresponds to the target PDB file name (see
-  ``$<TARGET_PDB_FILE_NAME:tgt>``) without prefix and suffix. For example,
-  if target file name is ``base.pdb``, the base name is ``base``.
+  ``$<TARGET_PDB_FILE_NAME:tgt>``) without prefix and suffix, and, optionally,
+  postfix.  For example, if the target file name is ``base_postfix.pdb``, the
+  base name is
 
-  See also the :prop_tgt:`PDB_NAME` target property and its configuration
-  specific variant :prop_tgt:`PDB_NAME_<CONFIG>`.
+    * ``base_postfix`` for ``$<TARGET_PDB_FILE_BASE_NAME:tgt>`` or
+      ``$<TARGET_PDB_FILE_BASE_NAME:tgt,POSTFIX:INCLUDE>``.
+    * ``base`` for ``$<TARGET_PDB_FILE_BASE_NAME:tgt,POSTFIX:EXCLUDE>``.
 
-  The :prop_tgt:`<CONFIG>_POSTFIX` and :prop_tgt:`DEBUG_POSTFIX` target
-  properties can also be considered.
+  See also the :prop_tgt:`OUTPUT_NAME` and :prop_tgt:`PDB_NAME` target
+  properties, their configuration-specific variants
+  :prop_tgt:`OUTPUT_NAME_<CONFIG>` and :prop_tgt:`PDB_NAME_<CONFIG>`, and the
+  :prop_tgt:`<CONFIG>_POSTFIX` and :prop_tgt:`DEBUG_POSTFIX` target properties.
 
   Note that ``tgt`` is not added as a dependency of the target this
   expression is evaluated on.
@@ -2545,6 +3358,13 @@ In the following, the phrase "the ``tgt`` filename" means the name of the
 
   This generator expression can e.g. be used to create a batch file using
   :command:`file(GENERATE)` which sets the PATH environment variable accordingly.
+
+.. genex:: $<TARGET_INTERMEDIATE_DIR:tgt>
+
+  .. versionadded:: 4.2
+
+  The full path to the directory where intermediate target files, such as
+  object and dependency files, are stored.
 
 Export And Install Expressions
 ------------------------------

@@ -27,7 +27,7 @@ else()
   unset(RunCMake_TEST_OPTIONS)
 endif()
 
-if("${RunCMake_GENERATOR}" MATCHES "^Visual Studio (1[4567])( 20[0-9][0-9])?$")
+if("${RunCMake_GENERATOR}" MATCHES "^Visual Studio (1[45678])( 20[0-9][0-9])?$")
   unset(ENV{WindowsSDKVersion})
 
   set(RunCMake_GENERATOR_PLATFORM "Test Platform,nocomma")
@@ -105,7 +105,9 @@ if("${RunCMake_GENERATOR}" MATCHES "^Visual Studio (1[4567])( 20[0-9][0-9])?$")
   endforeach()
   foreach(expect_version IN LISTS kits)
     set(RunCMake_TEST_VARIANT_DESCRIPTION "-CMP0149-OLD-${expect_version}")
+    set(RunCMake_TEST_EXPECT_stderr ".") # ignore CMP0149 deprecation warnings
     run_cmake_with_options(VersionExists -DCMAKE_SYSTEM_VERSION=${expect_version} -DCMAKE_POLICY_DEFAULT_CMP0149=OLD)
+    unset(RunCMake_TEST_EXPECT_stderr)
   endforeach()
   if(kits MATCHES "(^|;)([0-9.]+)$")
     set(expect_version "${CMAKE_MATCH_2}")

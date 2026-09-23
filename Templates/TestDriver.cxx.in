@@ -66,7 +66,7 @@ CM_LOCAL char* lowercase(const char* string)
   }
   strcpy(new_string, string);  /* NOLINT */
   for (p = new_string; *p != 0; ++p) {
-    *p = CM_CAST(char, tolower(*p));
+    *p = CM_CAST(char, tolower(CM_CAST(unsigned char, *p)));
   }
   return new_string;
 }
@@ -97,7 +97,7 @@ int main(int ac, char* av[])
 
   /* If no test name was given */
   /* process command line with user function.  */
-  if (ac < 2) {
+  if (ac > 0 && ac < 2) {
     /* Ask for a test.  */
     printf("Available tests:\n");
     for (i = 0; i < NumTests; ++i) {

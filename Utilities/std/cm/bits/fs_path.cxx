@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 
 #include <cm/filesystem> // IWYU pragma: associated
 
@@ -24,7 +24,42 @@
 #  include <cm/string_view>
 #  include <cmext/string_view>
 
+#endif
+
 namespace cm {
+namespace filesystem {
+namespace internals {
+
+// class unicode_helper
+unicode_helper::utf8_state unicode_helper::decode(utf8_state const state,
+                                                  std::uint8_t const fragment,
+                                                  std::uint32_t& codepoint)
+{
+  std::uint32_t const utf8_state_info[] = {
+    // encoded states
+    0x11111111u, 0x11111111u, 0x77777777u, 0x77777777u, 0x88888888u,
+    0x88888888u, 0x88888888u, 0x88888888u, 0x22222299u, 0x22222222u,
+    0x22222222u, 0x22222222u, 0x3333333au, 0x33433333u, 0x9995666bu,
+    0x99999999u, 0x88888880u, 0x22818108u, 0x88888881u, 0x88888882u,
+    0x88888884u, 0x88888887u, 0x88888886u, 0x82218108u, 0x82281108u,
+    0x88888888u, 0x88888883u, 0x88888885u, 0u,          0u,
+    0u,          0u,
+  };
+  std::uint8_t category = fragment < 128
+    ? 0
+    : (utf8_state_info[(fragment >> 3) & 0xf] >> ((fragment & 7) << 2)) & 0xf;
+  codepoint = (state ? (codepoint << 6) | (fragment & 0x3fu)
+                     : (0xffu >> category) & fragment);
+  return state == s_reject
+    ? s_reject
+    : static_cast<utf8_state>(
+        (utf8_state_info[category + 16] >> (state << 2)) & 0xf);
+}
+}
+}
+
+#if !defined(CMake_HAVE_CXX_FILESYSTEM)
+
 namespace filesystem {
 namespace internals {
 
@@ -68,7 +103,7 @@ public:
   {
   }
 
-  path_parser(const path_parser&) = default;
+  path_parser(path_parser const&) = default;
 
   ~path_parser() = default;
 
@@ -76,8 +111,8 @@ public:
 
   void increment() noexcept
   {
-    const pointer start = this->next_token();
-    const pointer end = this->after_end();
+    pointer const start = this->next_token();
+    pointer const end = this->after_end();
 
     if (start == end) {
       this->set_state(state::at_end);
@@ -138,8 +173,8 @@ public:
 
   void decrement() noexcept
   {
-    const pointer rstart = this->current_token() - 1;
-    const pointer rend = this->before_start();
+    pointer const rstart = this->current_token() - 1;
+    pointer const rend = this->before_start();
 
     if (rstart == rend) {
       this->set_state(state::before_begin);
@@ -327,7 +362,7 @@ private:
          )) {
       return nullptr;
     }
-    const auto step = ptr < end ? 1 : -1;
+    auto const step = ptr < end ? 1 : -1;
     ptr += step;
     while (ptr != end &&
            (*ptr == '/'
@@ -357,7 +392,7 @@ private:
     ) {
       return nullptr;
     }
-    const auto step = ptr < end ? 1 : -1;
+    auto const step = ptr < end ? 1 : -1;
     ptr += step;
     while (ptr != end && *ptr != '/'
 #  if defined(_WIN32)
@@ -391,8 +426,9 @@ private:
 #  if defined(_WIN32)
   bool is_drive_name(pointer ptr)
   {
-    return std::toupper(ptr[0]) >= 'A' && std::toupper(ptr[0]) <= 'Z' &&
-      ptr[1] == ':';
+    auto ptr0 =
+      static_cast<char>(std::toupper(static_cast<unsigned char>(ptr[0])));
+    return ptr0 >= 'A' && ptr0 <= 'Z' && ptr[1] == ':';
   }
 #  endif
 
@@ -476,62 +512,14 @@ private:
   }
 
   state State;
-  const cm::string_view Path;
+  cm::string_view const Path;
   cm::string_view Entry;
 };
-
-// class unicode_helper
-void unicode_helper::append(std::string& str, std::uint32_t codepoint)
-{
-  if (codepoint <= 0x7f) {
-    str.push_back(static_cast<char>(codepoint));
-  } else if (codepoint >= 0x80 && codepoint <= 0x7ff) {
-    str.push_back(static_cast<char>((codepoint >> 6) + 192));
-    str.push_back(static_cast<char>((codepoint & 0x3f) + 128));
-  } else if ((codepoint >= 0x800 && codepoint <= 0xd7ff) ||
-             (codepoint >= 0xe000 && codepoint <= 0xffff)) {
-    str.push_back(static_cast<char>((codepoint >> 12) + 224));
-    str.push_back(static_cast<char>(((codepoint & 0xfff) >> 6) + 128));
-    str.push_back(static_cast<char>((codepoint & 0x3f) + 128));
-  } else if (codepoint >= 0x10000 && codepoint <= 0x10ffff) {
-    str.push_back(static_cast<char>((codepoint >> 18) + 240));
-    str.push_back(static_cast<char>(((codepoint & 0x3ffff) >> 12) + 128));
-    str.push_back(static_cast<char>(((codepoint & 0xfff) >> 6) + 128));
-    str.push_back(static_cast<char>((codepoint & 0x3f) + 128));
-  } else {
-    append(str, 0xfffd);
-  }
-}
-
-unicode_helper::utf8_state unicode_helper::decode(const utf8_state state,
-                                                  const std::uint8_t fragment,
-                                                  std::uint32_t& codepoint)
-{
-  const std::uint32_t utf8_state_info[] = {
-    // encoded states
-    0x11111111u, 0x11111111u, 0x77777777u, 0x77777777u, 0x88888888u,
-    0x88888888u, 0x88888888u, 0x88888888u, 0x22222299u, 0x22222222u,
-    0x22222222u, 0x22222222u, 0x3333333au, 0x33433333u, 0x9995666bu,
-    0x99999999u, 0x88888880u, 0x22818108u, 0x88888881u, 0x88888882u,
-    0x88888884u, 0x88888887u, 0x88888886u, 0x82218108u, 0x82281108u,
-    0x88888888u, 0x88888883u, 0x88888885u, 0u,          0u,
-    0u,          0u,
-  };
-  std::uint8_t category = fragment < 128
-    ? 0
-    : (utf8_state_info[(fragment >> 3) & 0xf] >> ((fragment & 7) << 2)) & 0xf;
-  codepoint = (state ? (codepoint << 6) | (fragment & 0x3fu)
-                     : (0xffu >> category) & fragment);
-  return state == s_reject
-    ? s_reject
-    : static_cast<utf8_state>(
-        (utf8_state_info[category + 16] >> (state << 2)) & 0xf);
-}
 
 } // internals
 
 // Class path
-path& path::operator/=(const path& p)
+path& path::operator/=(path const& p)
 {
   if (p.is_absolute() ||
       (p.has_root_name() && p.get_root_name() != this->get_root_name())) {
@@ -577,8 +565,8 @@ path path::lexically_normal() const
     return *this;
   }
 
-  const cm::string_view dot = "."_s;
-  const cm::string_view dotdot = ".."_s;
+  cm::string_view const dot = "."_s;
+  cm::string_view const dotdot = ".."_s;
 
   std::vector<cm::string_view> root_parts;
   std::vector<cm::string_view> parts;
@@ -632,7 +620,7 @@ path path::lexically_normal() const
 
   std::string np;
   np.reserve(path_size);
-  for (const auto& p : root_parts) {
+  for (auto const& p : root_parts) {
     np += p;
   }
   // convert any slash to the preferred_separator
@@ -641,7 +629,7 @@ path path::lexically_normal() const
       np.begin(), np.end(), '/',
       static_cast<std::string::value_type>(this->preferred_separator));
   }
-  for (const auto& p : parts) {
+  for (auto const& p : parts) {
     if (!p.empty()) {
       np += p;
       np += static_cast<std::string::value_type>(this->preferred_separator);
@@ -658,7 +646,7 @@ path path::lexically_normal() const
   return path(std::move(np));
 }
 
-path path::lexically_relative(const path& base) const
+path path::lexically_relative(path const& base) const
 {
   internals::path_parser parser(this->path_);
   ++parser;
@@ -723,8 +711,8 @@ path path::lexically_relative(const path& base) const
   }
 #  endif
 
-  const cm::string_view dot = "."_s;
-  const cm::string_view dotdot = ".."_s;
+  cm::string_view const dot = "."_s;
+  cm::string_view const dotdot = ".."_s;
 
   auto a = this->begin(), aend = this->end();
   auto b = base.begin(), bend = base.end();
@@ -929,7 +917,7 @@ path::iterator::iterator()
   : path_(nullptr)
 {
 }
-path::iterator::iterator(const iterator& other)
+path::iterator::iterator(iterator const& other)
 {
   this->path_ = other.path_;
   if (other.parser_) {
@@ -937,7 +925,7 @@ path::iterator::iterator(const iterator& other)
     this->path_element_ = path(**this->parser_);
   }
 }
-path::iterator::iterator(const path* p, bool at_end)
+path::iterator::iterator(path const* p, bool at_end)
   : path_(p)
   , parser_(cm::make_unique<internals::path_parser>(p->path_, at_end))
 {
@@ -949,7 +937,7 @@ path::iterator::iterator(const path* p, bool at_end)
 
 path::iterator::~iterator() = default;
 
-path::iterator& path::iterator::operator=(const iterator& other)
+path::iterator& path::iterator::operator=(iterator const& other)
 {
   this->path_ = other.path_;
   if (other.parser_) {
@@ -996,7 +984,7 @@ path::iterator& path::iterator::operator--()
   return *this;
 }
 
-bool operator==(const path::iterator& lhs, const path::iterator& rhs)
+bool operator==(path::iterator const& lhs, path::iterator const& rhs)
 {
   return lhs.path_ == rhs.path_ && lhs.parser_ != nullptr &&
     ((lhs.parser_->at_end() && rhs.parser_->at_end()) ||
@@ -1004,7 +992,7 @@ bool operator==(const path::iterator& lhs, const path::iterator& rhs)
      ((**lhs.parser_).data() == (**rhs.parser_).data()));
 }
 
-std::size_t hash_value(const path& p) noexcept
+std::size_t hash_value(path const& p) noexcept
 {
   internals::path_parser parser(p.path_);
   std::hash<cm::string_view> hasher;
@@ -1018,13 +1006,5 @@ std::size_t hash_value(const path& p) noexcept
   return value;
 }
 } // filesystem
-} // cm
-
-#else
-
-// Avoid empty translation unit.
-void cm_filesystem_path_cxx()
-{
-}
-
 #endif
+} // cm

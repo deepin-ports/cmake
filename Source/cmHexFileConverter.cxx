@@ -1,10 +1,11 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmHexFileConverter.h"
 
-#include <cctype>
 #include <cstdio>
 #include <cstring>
+
+#include "cmsys/String.h"
 
 #include "cmSystemTools.h"
 
@@ -13,7 +14,7 @@
 #define MOTOROLA_SREC_MIN_LINE_LENGTH (2 + 2 + 4 + 2)
 #define MOTOROLA_SREC_MAX_LINE_LENGTH (2 + 2 + 8 + (256 * 2) + 2)
 
-static unsigned int ChompStrlen(const char* line)
+static unsigned int ChompStrlen(char const* line)
 {
   if (!line) {
     return 0;
@@ -28,7 +29,7 @@ static unsigned int ChompStrlen(const char* line)
   return length;
 }
 
-static bool OutputBin(FILE* file, const char* buf, unsigned int startIndex,
+static bool OutputBin(FILE* file, char const* buf, unsigned int startIndex,
                       unsigned int stopIndex)
 {
   bool success = true;
@@ -54,7 +55,7 @@ static bool OutputBin(FILE* file, const char* buf, unsigned int startIndex,
 }
 
 // see http://www.die.net/doc/linux/man/man5/srec.5.html
-static bool ConvertMotorolaSrecLine(const char* buf, FILE* outFile)
+static bool ConvertMotorolaSrecLine(char const* buf, FILE* outFile)
 {
   unsigned int slen = ChompStrlen(buf);
   if ((slen < MOTOROLA_SREC_MIN_LINE_LENGTH) ||
@@ -93,7 +94,7 @@ static bool ConvertMotorolaSrecLine(const char* buf, FILE* outFile)
 }
 
 // see http://en.wikipedia.org/wiki/Intel_hex
-static bool ConvertIntelHexLine(const char* buf, FILE* outFile)
+static bool ConvertIntelHexLine(char const* buf, FILE* outFile)
 {
   unsigned int slen = ChompStrlen(buf);
   if ((slen < INTEL_HEX_MIN_LINE_LENGTH) ||
@@ -128,7 +129,7 @@ static bool ConvertIntelHexLine(const char* buf, FILE* outFile)
 }
 
 cmHexFileConverter::FileType cmHexFileConverter::DetermineFileType(
-  const std::string& inFileName)
+  std::string const& inFileName)
 {
   char buf[1024];
   FILE* inFile = cmsys::SystemTools::Fopen(inFileName, "rb");
@@ -163,15 +164,15 @@ cmHexFileConverter::FileType cmHexFileConverter::DetermineFileType(
   }
 
   for (unsigned int i = 1; i < slen; i++) {
-    if (!isxdigit(buf[i])) {
+    if (!cmsysString_isxdigit(buf[i])) {
       return Binary;
     }
   }
   return type;
 }
 
-bool cmHexFileConverter::TryConvert(const std::string& inFileName,
-                                    const std::string& outFileName)
+bool cmHexFileConverter::TryConvert(std::string const& inFileName,
+                                    std::string const& outFileName)
 {
   FileType type = DetermineFileType(inFileName);
   if (type == Binary) {

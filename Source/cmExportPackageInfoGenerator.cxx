@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmExportPackageInfoGenerator.h"
 
 #include <memory>
@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include <cm/optional>
 #include <cm/string_view>
 #include <cmext/algorithm>
 #include <cmext/string_view>
@@ -14,6 +15,9 @@
 #include <cm3p/json/value.h>
 #include <cm3p/json/writer.h>
 
+#include "cmsys/RegularExpression.hxx"
+
+#include "cmArgumentParserTypes.h"
 #include "cmExportSet.h"
 #include "cmFindPackageStack.h"
 #include "cmGeneratorExpression.h"
@@ -21,23 +25,25 @@
 #include "cmList.h"
 #include "cmMakefile.h"
 #include "cmMessageType.h"
+#include "cmPackageInfoArguments.h"
 #include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
 #include "cmTarget.h"
-#include "cmValue.h"
 
-static const std::string kCPS_VERSION_STR = "0.12.0";
+static std::string const kCPS_VERSION_STR = "0.14.1";
 
 cmExportPackageInfoGenerator::cmExportPackageInfoGenerator(
-  std::string packageName, std::string version, std::string versionCompat,
-  std::string versionSchema, std::vector<std::string> defaultTargets,
-  std::vector<std::string> defaultConfigurations)
-  : PackageName(std::move(packageName))
-  , PackageVersion(std::move(version))
-  , PackageVersionCompat(std::move(versionCompat))
-  , PackageVersionSchema(std::move(versionSchema))
-  , DefaultTargets(std::move(defaultTargets))
-  , DefaultConfigurations(std::move(defaultConfigurations))
+  cmPackageInfoArguments arguments)
+  : PackageName(std::move(arguments.PackageName))
+  , PackageVersion(std::move(arguments.Version))
+  , PackageVersionCompat(std::move(arguments.VersionCompat))
+  , PackageVersionSchema(std::move(arguments.VersionSchema))
+  , PackageDescription(std::move(arguments.Description))
+  , PackageWebsite(std::move(arguments.Website))
+  , PackageLicense(std::move(arguments.License))
+  , DefaultLicense(std::move(arguments.DefaultLicense))
+  , DefaultTargets(std::move(arguments.DefaultTargets))
+  , DefaultConfigurations(std::move(arguments.DefaultConfigs))
 {
 }
 
@@ -62,8 +68,18 @@ void cmExportPackageInfoGenerator::WritePackageInfo(
 }
 
 namespace {
+bool SetProperty(Json::Value& object, std::string const& property,
+                 std::string const& value)
+{
+  if (!value.empty()) {
+    object[property] = value;
+    return true;
+  }
+  return false;
+}
+
 template <typename T>
-void buildArray(Json::Value& object, std::string const& property,
+void BuildArray(Json::Value& object, std::string const& property,
                 T const& values)
 {
   if (!values.empty()) {
@@ -73,6 +89,63 @@ void buildArray(Json::Value& object, std::string const& property,
     }
   }
 }
+
+bool CheckSimpleVersion(std::string const& version)
+{
+  cmsys::RegularExpression regex("^[0-9]+([.][0-9]+)*([-+].*)?$");
+  return regex.find(version);
+}
+}
+
+bool cmExportPackageInfoGenerator::CheckVersion() const
+{
+  if (!this->PackageVersion.empty()) {
+    std::string const& schema = [&] {
+      if (this->PackageVersionSchema.empty()) {
+        return std::string{ "simple" };
+      }
+      return cmSystemTools::LowerCase(this->PackageVersionSchema);
+    }();
+    bool (*validator)(std::string const&) = nullptr;
+    bool result = true;
+
+    if (schema == "simple"_s) {
+      validator = &CheckSimpleVersion;
+    } else if (schema == "dpkg"_s || schema == "rpm"_s ||
+               schema == "pep440"_s) {
+      // TODO
+      // We don't validate these at this time. Eventually, we would like to do
+      // so, but will probably need to introduce a policy whether to treat
+      // invalid versions as an error.
+    } else if (schema != "custom"_s) {
+      this->IssueMessage(MessageType::AUTHOR_WARNING,
+                         cmStrCat("Package \""_s, this->GetPackageName(),
+                                  "\" uses unrecognized version schema \""_s,
+                                  this->PackageVersionSchema, "\"."_s));
+    }
+
+    if (validator) {
+      if (!(*validator)(this->PackageVersion)) {
+        this->ReportError(cmStrCat("Package \""_s, this->GetPackageName(),
+                                   "\" version \""_s, this->PackageVersion,
+                                   "\" does not conform to the \""_s, schema,
+                                   "\" schema."_s));
+        result = false;
+      }
+      if (!this->PackageVersionCompat.empty() &&
+          !(*validator)(this->PackageVersionCompat)) {
+        this->ReportError(
+          cmStrCat("Package \""_s, this->GetPackageName(),
+                   "\" compatibility version \""_s, this->PackageVersionCompat,
+                   "\" does not conform to the \""_s, schema, "\" schema."_s));
+        result = false;
+      }
+    }
+
+    return result;
+  }
+
+  return true;
 }
 
 bool cmExportPackageInfoGenerator::CheckDefaultTargets() const
@@ -104,20 +177,18 @@ Json::Value cmExportPackageInfoGenerator::GeneratePackageInfo() const
   package["name"] = this->GetPackageName();
   package["cps_version"] = std::string(kCPS_VERSION_STR);
 
-  if (!this->PackageVersion.empty()) {
-    package["version"] = this->PackageVersion;
-    if (!this->PackageVersionCompat.empty()) {
-      package["compat_version"] = this->PackageVersionCompat;
-    }
-    if (!this->PackageVersionSchema.empty()) {
-      package["version_schema"] = this->PackageVersionSchema;
-    }
+  if (SetProperty(package, "version", this->PackageVersion)) {
+    SetProperty(package, "compat_version", this->PackageVersionCompat);
+    SetProperty(package, "version_schema", this->PackageVersionSchema);
   }
 
-  buildArray(package, "default_components", this->DefaultTargets);
-  buildArray(package, "configurations", this->DefaultConfigurations);
+  BuildArray(package, "default_components", this->DefaultTargets);
+  BuildArray(package, "configurations", this->DefaultConfigurations);
 
-  // TODO: description, website, license
+  SetProperty(package, "description", this->PackageDescription);
+  SetProperty(package, "website", this->PackageWebsite);
+  SetProperty(package, "license", this->PackageLicense);
+  SetProperty(package, "default_license", this->DefaultLicense);
 
   return package;
 }
@@ -127,9 +198,32 @@ void cmExportPackageInfoGenerator::GeneratePackageRequires(
 {
   if (!this->Requirements.empty()) {
     Json::Value& requirements = package["requires"];
+
+    // Build description for each requirement.
     for (auto const& requirement : this->Requirements) {
-      // TODO: version, hint
-      requirements[requirement] = Json::Value{};
+      auto data = Json::Value{ Json::objectValue };
+
+      // Add required components.
+      if (!requirement.second.Components.empty()) {
+        auto components = Json::Value{ Json::arrayValue };
+        for (std::string const& component : requirement.second.Components) {
+          components.append(component);
+        }
+        data["components"] = components;
+      }
+
+      // Add additional dependency information.
+      if (requirement.second.Directory) {
+        auto hints = Json::Value{ Json::arrayValue };
+        hints.append(*requirement.second.Directory);
+        data["hints"] = hints;
+      }
+
+      if (requirement.second.Version) {
+        data["version"] = *requirement.second.Version;
+      }
+
+      requirements[requirement.first] = data;
     }
   }
 }
@@ -145,6 +239,7 @@ Json::Value* cmExportPackageInfoGenerator::GenerateImportTarget(
 
   Json::Value& component = components[name];
   Json::Value& type = component["type"];
+
   switch (targetType) {
     case cmStateEnums::EXECUTABLE:
       type = "executable";
@@ -159,7 +254,7 @@ Json::Value* cmExportPackageInfoGenerator::GenerateImportTarget(
       type = "module";
       break;
     case cmStateEnums::INTERFACE_LIBRARY:
-      type = "interface";
+      type = target->IsSymbolic() ? "symbolic" : "interface";
       break;
     default:
       type = "unknown";
@@ -191,28 +286,12 @@ bool cmExportPackageInfoGenerator::GenerateInterfaceProperties(
   this->GenerateInterfaceListProperty(result, component, target, "includes",
                                       "INCLUDE_DIRECTORIES"_s, properties);
 
-  // TODO: description, license
+  this->GenerateProperty(result, component, target, "license", "SPDX_LICENSE",
+                         properties);
+
+  // TODO: description
 
   return result;
-}
-
-namespace {
-bool forbidGeneratorExpressions(std::string const& propertyName,
-                                std::string const& propertyValue,
-                                cmGeneratorTarget const* target)
-{
-  std::string const& evaluatedValue = cmGeneratorExpression::Preprocess(
-    propertyValue, cmGeneratorExpression::StripAllGeneratorExpressions);
-  if (evaluatedValue != propertyValue) {
-    target->Makefile->IssueMessage(
-      MessageType::FATAL_ERROR,
-      cmStrCat("Property \"", propertyName, "\" of target \"",
-               target->GetName(),
-               "\" contains a generator expression. This is not allowed."));
-    return false;
-  }
-  return true;
-}
 }
 
 bool cmExportPackageInfoGenerator::NoteLinkedTarget(
@@ -228,16 +307,25 @@ bool cmExportPackageInfoGenerator::NoteLinkedTarget(
 
   if (linkedTarget->IsImported()) {
     // Target is imported from a found package.
-    auto pkgName = [linkedTarget]() -> std::string {
-      auto const& pkgStack = linkedTarget->Target->GetFindPackageStack();
+    using Package = cm::optional<std::pair<std::string, cmPackageInformation>>;
+    auto pkgInfo = [](cmTarget* t) -> Package {
+      cmFindPackageStack pkgStack = t->GetFindPackageStack();
       if (!pkgStack.Empty()) {
-        return pkgStack.Top().Name;
+        return std::make_pair(pkgStack.Top().Name,
+                              *pkgStack.Top().PackageInfo);
       }
 
-      return linkedTarget->Target->GetProperty("EXPORT_FIND_PACKAGE_NAME");
-    }();
+      cmPackageInformation package;
+      std::string const pkgName =
+        t->GetSafeProperty("EXPORT_FIND_PACKAGE_NAME");
+      if (pkgName.empty()) {
+        return cm::nullopt;
+      }
 
-    if (pkgName.empty()) {
+      return std::make_pair(pkgName, package);
+    }(linkedTarget->Target);
+
+    if (!pkgInfo) {
       target->Makefile->IssueMessage(
         MessageType::FATAL_ERROR,
         cmStrCat("Target \"", target->GetName(),
@@ -246,6 +334,8 @@ bool cmExportPackageInfoGenerator::NoteLinkedTarget(
       return false;
     }
 
+    std::string const& pkgName = pkgInfo->first;
+
     auto const& prefix = cmStrCat(pkgName, "::");
     if (!cmHasPrefix(linkedName, prefix)) {
       target->Makefile->IssueMessage(
@@ -253,21 +343,23 @@ bool cmExportPackageInfoGenerator::NoteLinkedTarget(
         cmStrCat("Target \"", target->GetName(), "\" references target \"",
                  linkedName, "\", which comes from the \"", pkgName,
                  "\" package, but does not belong to the package's "
-                 "canonical namespace. This is not allowed."));
+                 "canonical namespace (\"",
+                 prefix, "\"). This is not allowed."));
       return false;
     }
 
-    // TODO: Record package version, hint.
-    this->Requirements.emplace(pkgName);
-    this->LinkTargets.emplace(
-      linkedName, cmStrCat(pkgName, ':', linkedName.substr(prefix.length())));
+    std::string component = linkedName.substr(prefix.length());
+    this->LinkTargets.emplace(linkedName, cmStrCat(pkgName, ':', component));
+    cmPackageInformation& req =
+      this->Requirements.insert(std::move(*pkgInfo)).first->second;
+    req.Components.emplace(std::move(component));
     return true;
   }
 
   // Target belongs to another export from this build.
   auto const& exportInfo = this->FindExportInfo(linkedTarget);
-  if (exportInfo.first.size() == 1) {
-    auto const& linkNamespace = exportInfo.second;
+  if (exportInfo.Namespaces.size() == 1 && exportInfo.Sets.size() == 1) {
+    auto const& linkNamespace = *exportInfo.Namespaces.begin();
     if (!cmHasSuffix(linkNamespace, "::")) {
       target->Makefile->IssueMessage(
         MessageType::FATAL_ERROR,
@@ -278,23 +370,43 @@ bool cmExportPackageInfoGenerator::NoteLinkedTarget(
       return false;
     }
 
-    auto pkgName =
-      cm::string_view{ linkNamespace.data(), linkNamespace.size() - 2 };
-
+    std::string pkgName{ linkNamespace.data(), linkNamespace.size() - 2 };
+    std::string component = linkedTarget->GetExportName();
     if (pkgName == this->GetPackageName()) {
-      this->LinkTargets.emplace(linkedName,
-                                cmStrCat(':', linkedTarget->GetExportName()));
+      this->LinkTargets.emplace(linkedName, cmStrCat(':', component));
     } else {
-      this->Requirements.emplace(pkgName);
-      this->LinkTargets.emplace(
-        linkedName, cmStrCat(pkgName, ':', linkedTarget->GetExportName()));
+      this->LinkTargets.emplace(linkedName, cmStrCat(pkgName, ':', component));
+      this->Requirements[pkgName].Components.emplace(std::move(component));
     }
     return true;
   }
 
+  // Target belongs to multiple namespaces or multiple export sets.
   // cmExportFileGenerator::HandleMissingTarget should have complained about
-  // this already. (In fact, we probably shouldn't ever get here.)
+  // this already.
   return false;
+}
+
+std::vector<std::string> cmExportPackageInfoGenerator::ExtractRequirements(
+  std::vector<std::string> const& names, bool& result,
+  std::vector<std::string>& libraryPaths) const
+{
+  std::vector<std::string> output;
+
+  for (auto const& name : names) {
+    auto const& ti = this->LinkTargets.find(name);
+    if (ti != this->LinkTargets.end()) {
+      if (ti->second.empty()) {
+        result = false;
+      } else {
+        output.emplace_back(ti->second);
+      }
+    } else {
+      libraryPaths.emplace_back(name);
+    }
+  }
+
+  return output;
 }
 
 void cmExportPackageInfoGenerator::GenerateInterfaceLinkProperties(
@@ -306,32 +418,33 @@ void cmExportPackageInfoGenerator::GenerateInterfaceLinkProperties(
     return;
   }
 
-  // TODO: Support $<LINK_ONLY>.
-  if (!forbidGeneratorExpressions(iter->first, iter->second, target)) {
+  // Extract any $<LINK_ONLY:...> from the link libraries, and assert that no
+  // other generator expressions are present.
+  std::map<std::string, std::vector<std::string>>
+    allowedGeneratorExpressions = {
+      { "COMPILE_ONLY", {} },
+      { "LINK_ONLY", {} },
+    };
+  std::string interfaceLinkLibraries;
+  if (!cmGeneratorExpression::ForbidGeneratorExpressions(
+        target, iter->first, iter->second, interfaceLinkLibraries,
+        allowedGeneratorExpressions)) {
     result = false;
     return;
   }
 
-  std::vector<std::string> buildRequires;
-  // std::vector<std::string> linkRequires; TODO
   std::vector<std::string> linkLibraries;
+  std::vector<std::string> buildRequires = this->ExtractRequirements(
+    cmList{ interfaceLinkLibraries }, result, linkLibraries);
+  std::vector<std::string> compileRequires = this->ExtractRequirements(
+    allowedGeneratorExpressions["COMPILE_ONLY"], result, linkLibraries);
+  std::vector<std::string> linkRequires = this->ExtractRequirements(
+    allowedGeneratorExpressions["LINK_ONLY"], result, linkLibraries);
 
-  for (auto const& name : cmList{ iter->second }) {
-    auto const& ti = this->LinkTargets.find(name);
-    if (ti != this->LinkTargets.end()) {
-      if (ti->second.empty()) {
-        result = false;
-      } else {
-        buildRequires.emplace_back(ti->second);
-      }
-    } else {
-      linkLibraries.emplace_back(name);
-    }
-  }
-
-  buildArray(component, "requires", buildRequires);
-  // buildArray(component, "link_requires", linkRequires); TODO
-  buildArray(component, "link_libraries", linkLibraries);
+  BuildArray(component, "requires", buildRequires);
+  BuildArray(component, "link_requires", linkRequires);
+  BuildArray(component, "link_libraries", linkLibraries);
+  BuildArray(component, "compile_requires", compileRequires);
 }
 
 void cmExportPackageInfoGenerator::GenerateInterfaceCompileFeatures(
@@ -343,7 +456,8 @@ void cmExportPackageInfoGenerator::GenerateInterfaceCompileFeatures(
     return;
   }
 
-  if (!forbidGeneratorExpressions(iter->first, iter->second, target)) {
+  if (!cmGeneratorExpression::ForbidGeneratorExpressions(target, iter->first,
+                                                         iter->second)) {
     result = false;
     return;
   }
@@ -352,14 +466,14 @@ void cmExportPackageInfoGenerator::GenerateInterfaceCompileFeatures(
   for (auto const& value : cmList{ iter->second }) {
     if (cmHasLiteralPrefix(value, "c_std_")) {
       auto suffix = cm::string_view{ value }.substr(6, 2);
-      features.emplace(cmStrCat("cxx", suffix));
+      features.emplace(cmStrCat("c", suffix));
     } else if (cmHasLiteralPrefix(value, "cxx_std_")) {
       auto suffix = cm::string_view{ value }.substr(8, 2);
       features.emplace(cmStrCat("c++", suffix));
     }
   }
 
-  buildArray(component, "compile_features", features);
+  BuildArray(component, "compile_features", features);
 }
 
 void cmExportPackageInfoGenerator::GenerateInterfaceCompileDefines(
@@ -372,7 +486,8 @@ void cmExportPackageInfoGenerator::GenerateInterfaceCompileDefines(
   }
 
   // TODO: Support language-specific defines.
-  if (!forbidGeneratorExpressions(iter->first, iter->second, target)) {
+  if (!cmGeneratorExpression::ForbidGeneratorExpressions(target, iter->first,
+                                                         iter->second)) {
     result = false;
     return;
   }
@@ -388,7 +503,7 @@ void cmExportPackageInfoGenerator::GenerateInterfaceCompileDefines(
   }
 
   if (!defines.empty()) {
-    component["compile_definitions"]["*"] = std::move(defines);
+    component["definitions"]["*"] = std::move(defines);
   }
 }
 
@@ -403,7 +518,8 @@ void cmExportPackageInfoGenerator::GenerateInterfaceListProperty(
     return;
   }
 
-  if (!forbidGeneratorExpressions(prop, iter->second, target)) {
+  if (!cmGeneratorExpression::ForbidGeneratorExpressions(target, prop,
+                                                         iter->second)) {
     result = false;
     return;
   }
@@ -414,8 +530,26 @@ void cmExportPackageInfoGenerator::GenerateInterfaceListProperty(
   }
 }
 
-void cmExportPackageInfoGenerator::GenerateInterfaceConfigProperties(
-  Json::Value& components, cmGeneratorTarget const* target,
+void cmExportPackageInfoGenerator::GenerateProperty(
+  bool& result, Json::Value& component, cmGeneratorTarget const* target,
+  std::string const& outName, std::string const& inName,
+  ImportPropertyMap const& properties) const
+{
+  auto const& iter = properties.find(inName);
+  if (iter == properties.end()) {
+    return;
+  }
+
+  if (!cmGeneratorExpression::ForbidGeneratorExpressions(target, inName,
+                                                         iter->second)) {
+    result = false;
+    return;
+  }
+
+  component[outName] = iter->second;
+}
+
+Json::Value cmExportPackageInfoGenerator::GenerateInterfaceConfigProperties(
   std::string const& suffix, ImportPropertyMap const& properties) const
 {
   Json::Value component;
@@ -432,6 +566,22 @@ void cmExportPackageInfoGenerator::GenerateInterfaceConfigProperties(
       component["location"] = p.second;
     } else if (prop == "IMPLIB") {
       component["link_location"] = p.second;
+    } else if (prop == "LINK_DEPENDENT_LIBRARIES") {
+      bool result;
+      std::vector<std::string> libraries;
+      std::vector<std::string> components =
+        this->ExtractRequirements(cmList{ p.second }, result, libraries);
+      BuildArray(component, "dyld_requires", components);
+      if (!libraries.empty()) {
+        // In theory this can never happen?
+        this->IssueMessage(
+          MessageType::AUTHOR_WARNING,
+          cmStrCat("Package \""_s, this->GetPackageName(),
+                   "\" has IMPORTED_LINK_DEPENDENT_LIBRARIES \""_s,
+                   cmJoin(libraries, ";"_s), this->PackageVersionSchema,
+                   "\". These cannot be exported. "
+                   "Consumers may encounter link errors."_s));
+      }
     } else if (prop == "LINK_INTERFACE_LANGUAGES") {
       std::vector<std::string> languages;
       for (auto const& lang : cmList{ p.second }) {
@@ -442,11 +592,28 @@ void cmExportPackageInfoGenerator::GenerateInterfaceConfigProperties(
           languages.emplace_back(std::move(ll));
         }
       }
-      buildArray(component, "link_languages", languages);
+      BuildArray(component, "link_languages", languages);
     }
   }
 
-  if (!component.empty()) {
-    components[target->GetExportName()] = component;
+  return component;
+}
+
+std::string cmExportPackageInfoGenerator::GenerateCxxModules(
+  Json::Value& component, cmGeneratorTarget* target,
+  std::string const& packagePath, std::string const& config)
+{
+  std::string manifestPath;
+
+  std::string const cxxModulesDirName = this->GetCxxModulesDirectory();
+  if (cxxModulesDirName.empty() || !target->HaveCxx20ModuleSources()) {
+    return manifestPath;
   }
+
+  manifestPath =
+    cmStrCat(cxxModulesDirName, "/target-", target->GetFilesystemExportName(),
+             '-', config.empty() ? "noconfig" : config, ".modules.json");
+
+  component["cpp_module_metadata"] = cmStrCat(packagePath, '/', manifestPath);
+  return manifestPath;
 }

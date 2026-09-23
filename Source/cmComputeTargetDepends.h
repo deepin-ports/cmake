@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #pragma once
 
 #include "cmConfigure.h" // IWYU pragma: keep
@@ -54,11 +54,13 @@ private:
   void CollectDepends();
   void CollectTargetDepends(size_t depender_index);
   void AddTargetDepend(size_t depender_index, cmLinkItem const& dependee_name,
-                       bool linking, bool cross);
+                       bool linking, bool cross,
+                       std::set<cmLinkItem>& emitted);
   void AddTargetDepend(size_t depender_index,
                        cmGeneratorTarget const* dependee,
                        cmListFileBacktrace const& dependee_backtrace,
-                       bool linking, bool cross);
+                       bool linking, bool cross,
+                       std::set<cmLinkItem>& emitted);
   void CollectSideEffects();
   void CollectSideEffectsForTarget(std::set<size_t>& visited,
                                    size_t depender_index);
@@ -69,12 +71,12 @@ private:
   bool ComputeFinalDepends(cmComputeComponentGraph const& ccg);
   void AddInterfaceDepends(size_t depender_index,
                            cmLinkItem const& dependee_name,
-                           const std::string& config,
+                           std::string const& config,
                            std::set<cmLinkItem>& emitted);
   void AddInterfaceDepends(size_t depender_index,
                            cmGeneratorTarget const* dependee,
                            cmListFileBacktrace const& dependee_backtrace,
-                           const std::string& config,
+                           std::string const& config,
                            std::set<cmLinkItem>& emitted);
   void AddObjectDepends(size_t depender_index, cmSourceFile const* o,
                         std::set<cmLinkItem>& emitted);
@@ -96,12 +98,12 @@ private:
   Graph IntermediateGraph;
   Graph FinalGraph;
   std::vector<TargetSideEffects> SideEffects;
-  void DisplayGraph(Graph const& graph, const std::string& name);
+  void DisplayGraph(Graph const& graph, std::string const& name);
   void DisplaySideEffects();
 
   // Deal with connected components.
   void DisplayComponents(cmComputeComponentGraph const& ccg,
-                         const std::string& name);
+                         std::string const& name);
   bool CheckComponents(cmComputeComponentGraph const& ccg);
   void ComplainAboutBadComponent(cmComputeComponentGraph const& ccg, size_t c,
                                  bool strong = false);

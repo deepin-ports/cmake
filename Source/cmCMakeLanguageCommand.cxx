@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmCMakeLanguageCommand.h"
 
 #include <algorithm>
@@ -25,6 +25,7 @@
 #include "cmState.h"
 #include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
+#include "cmValue.h"
 #include "cmake.h"
 
 namespace {
@@ -217,10 +218,10 @@ bool cmCMakeLanguageCommandEVAL(std::vector<cmListFileArgument> const& args,
       "called with unsupported arguments between EVAL and CODE arguments");
   }
 
-  const std::string code =
+  std::string const code =
     cmJoin(cmMakeRange(expandedArgs.begin() + 2, expandedArgs.end()), " ");
   return makefile.ReadListFileAsString(
-    code, cmStrCat(context.FilePath, ":", context.Line, ":EVAL"));
+    code, cmStrCat(context.FilePath, ':', context.Line, ":EVAL"));
 }
 
 bool cmCMakeLanguageCommandSET_DEPENDENCY_PROVIDER(
@@ -252,7 +253,7 @@ bool cmCMakeLanguageCommandSET_DEPENDENCY_PROVIDER(
 
   if (!unparsed.empty()) {
     return FatalError(
-      status, cmStrCat("Unrecognized keyword: \"", unparsed.front(), "\""));
+      status, cmStrCat("Unrecognized keyword: \"", unparsed.front(), '"'));
   }
 
   // We store the command that FetchContent_MakeAvailable() can call in a
@@ -296,7 +297,7 @@ bool cmCMakeLanguageCommandSET_DEPENDENCY_PROVIDER(
     } else {
       return FatalError(
         status,
-        cmStrCat("Unknown dependency provider method \"", method, "\""));
+        cmStrCat("Unknown dependency provider method \"", method, '"'));
     }
   }
 
@@ -324,7 +325,7 @@ bool cmCMakeLanguageCommandGET_MESSAGE_LOG_LEVEL(
   Message::LogLevel logLevel = makefile.GetCurrentLogLevel();
   std::string outputValue = cmake::LogLevelToString(logLevel);
 
-  const std::string& outputVariable = expandedArgs[1];
+  std::string const& outputVariable = expandedArgs[1];
   makefile.AddDefinition(outputVariable, outputValue);
   return true;
 }
@@ -396,9 +397,7 @@ bool cmCMakeLanguageCommand(std::vector<cmListFileArgument> const& args,
       return FatalError(status, "EXIT requires one argument");
     }
 
-    auto workingMode =
-      status.GetMakefile().GetCMakeInstance()->GetWorkingMode();
-    if (workingMode != cmake::SCRIPT_MODE) {
+    if (!status.GetMakefile().GetCMakeInstance()->RoleSupportsExitCode()) {
       return FatalError(status, "EXIT can be used only in SCRIPT mode");
     }
 
@@ -410,9 +409,7 @@ bool cmCMakeLanguageCommand(std::vector<cmListFileArgument> const& args,
                                  expArgs[expArg], '\"'));
     }
 
-    if (workingMode == cmake::SCRIPT_MODE) {
-      status.SetExitCode(static_cast<int>(retCode));
-    }
+    status.SetExitCode(static_cast<int>(retCode));
     return true;
   }
 
@@ -467,7 +464,7 @@ bool cmCMakeLanguageCommand(std::vector<cmListFileArgument> const& args,
         if (!defer.Directory) {
           return FatalError(status,
                             cmStrCat("DEFER DIRECTORY:\n  "_s, dir,
-                                     "\nis not known.  "_s,
+                                     "\nis not known.  "
                                      "It may not have been processed yet."_s));
         }
       } else if (expArgs[expArg] == "ID"_s) {
@@ -540,6 +537,41 @@ bool cmCMakeLanguageCommand(std::vector<cmListFileArgument> const& args,
   if (expArgs[expArg] == "GET_EXPERIMENTAL_FEATURE_ENABLED") {
     return cmCMakeLanguageCommandGET_EXPERIMENTAL_FEATURE_ENABLED(args,
                                                                   status);
+  }
+
+  if (expArgs[expArg] == "TRACE") {
+    ++expArg; // Consume "TRACE".
+
+    if (!moreArgs()) {
+      return FatalError(status, "TRACE missing a boolean value");
+    }
+
+    bool const value = cmValue::IsOn(expArgs[expArg++]);
+    bool expand = false;
+
+    if (value && moreArgs()) {
+      expand = (expArgs[expArg] == "EXPAND");
+      if (!expand) {
+        return FatalError(
+          status,
+          cmStrCat("TRACE ON given an invalid argument ", expArgs[expArg]));
+      }
+      ++expArg;
+    }
+
+    if (moreArgs()) {
+      return FatalError(
+        status,
+        cmStrCat("TRACE O", value ? "N" : "FF", " given too many arguments"));
+    }
+
+    cmMakefile& makefile = status.GetMakefile();
+    if (value) {
+      makefile.GetCMakeInstance()->PushTraceCmd(expand);
+      return true;
+    }
+    return makefile.GetCMakeInstance()->PopTraceCmd() ||
+      FatalError(status, "TRACE OFF request without a corresponding TRACE ON");
   }
 
   return FatalError(status, "called with unknown meta-operation");

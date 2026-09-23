@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 
 #include "cmInstallScriptHandler.h"
 
@@ -21,6 +21,7 @@
 
 #include "cmCryptoHash.h"
 #include "cmGeneratedFileStream.h"
+#include "cmInstrumentation.h"
 #include "cmJSONState.h"
 #include "cmProcessOutput.h"
 #include "cmStringAlgorithms.h"
@@ -30,65 +31,120 @@
 #include "cmUVStream.h"
 
 using InstallScript = cmInstallScriptHandler::InstallScript;
+using InstallScriptRunner = cmInstallScriptHandler::InstallScriptRunner;
 
 cmInstallScriptHandler::cmInstallScriptHandler(std::string _binaryDir,
                                                std::string _component,
+                                               std::string _config,
                                                std::vector<std::string>& args)
   : binaryDir(std::move(_binaryDir))
   , component(std::move(_component))
 {
-  const std::string& file =
+  std::string const& file =
     cmStrCat(this->binaryDir, "/CMakeFiles/InstallScripts.json");
+  this->parallel = false;
+
+  auto addScript = [this, &args](std::string script,
+                                 std::string config) -> void {
+    this->scripts.push_back({ script, config, args });
+    if (!config.empty()) {
+      this->scripts.back().command.insert(
+        this->scripts.back().command.end() - 1,
+        cmStrCat("-DCMAKE_INSTALL_CONFIG_NAME=", config));
+    }
+    this->scripts.back().command.emplace_back(script);
+    this->directories.push_back(cmSystemTools::GetFilenamePath(script));
+  };
+
+  int compare = 1;
   if (cmSystemTools::FileExists(file)) {
-    int compare;
     cmSystemTools::FileTimeCompare(
       cmStrCat(this->binaryDir, "/CMakeFiles/cmake.check_cache"), file,
       &compare);
-    if (compare < 1) {
+  }
+  if (compare < 1) {
+    Json::CharReaderBuilder rbuilder;
+    auto JsonReader =
+      std::unique_ptr<Json::CharReader>(rbuilder.newCharReader());
+    std::vector<char> content;
+    Json::Value value;
+    cmJSONState state(file, &value);
+    this->parallel = value["Parallel"].asBool();
+    if (this->parallel) {
       args.insert(args.end() - 1, "-DCMAKE_INSTALL_LOCAL_ONLY=1");
-      Json::CharReaderBuilder rbuilder;
-      auto JsonReader =
-        std::unique_ptr<Json::CharReader>(rbuilder.newCharReader());
-      std::vector<char> content;
-      Json::Value value;
-      cmJSONState state(file, &value);
-      for (auto const& script : value["InstallScripts"]) {
-        this->commands.push_back(args);
-        this->commands.back().emplace_back(script.asCString());
-        this->directories.push_back(
-          cmSystemTools::GetFilenamePath(script.asCString()));
+    }
+    if (_config.empty() && value.isMember("Configs")) {
+      for (auto const& config : value["Configs"]) {
+        this->configs.push_back(config.asCString());
+      }
+    } else {
+      this->configs.push_back(_config);
+    }
+    for (auto const& script : value["InstallScripts"]) {
+      for (auto const& config : configs) {
+        addScript(script.asCString(), config);
+      }
+      if (!this->parallel) {
+        break;
       }
     }
+  } else {
+    addScript(cmStrCat(this->binaryDir, "/cmake_install.cmake"), _config);
   }
 }
 
-bool cmInstallScriptHandler::isParallel()
+bool cmInstallScriptHandler::IsParallel()
 {
-  return !this->commands.empty();
+  return this->parallel;
 }
 
-int cmInstallScriptHandler::install(unsigned int j)
+std::vector<InstallScript> cmInstallScriptHandler::GetScripts() const
+{
+  return this->scripts;
+}
+
+int cmInstallScriptHandler::Install(unsigned int j,
+                                    cmInstrumentation& instrumentation)
 {
   cm::uv_loop_ptr loop;
   loop.init();
-  std::vector<InstallScript> scripts;
-  scripts.reserve(this->commands.size());
-  for (auto const& cmd : this->commands) {
-    scripts.emplace_back(cmd);
+  std::vector<InstallScriptRunner> runners;
+  runners.reserve(this->scripts.size());
+
+  std::vector<std::string> instrument_arg;
+  if (instrumentation.HasQuery()) {
+    instrument_arg = { cmSystemTools::GetCTestCommand(),
+                       "--instrument",
+                       "--command-type",
+                       "install",
+                       "--build-dir",
+                       this->binaryDir,
+                       "--config",
+                       "",
+                       "--" };
+  }
+
+  for (auto& script : this->scripts) {
+    if (!instrument_arg.empty()) {
+      instrument_arg[7] = script.config; // --config <script.config>
+    }
+    script.command.insert(script.command.begin(), instrument_arg.begin(),
+                          instrument_arg.end());
+    runners.emplace_back(script);
   }
   std::size_t working = 0;
   std::size_t installed = 0;
   std::size_t i = 0;
 
   std::function<void()> queueScripts;
-  queueScripts = [&scripts, &working, &installed, &i, &loop, j,
+  queueScripts = [&runners, &working, &installed, &i, &loop, j,
                   &queueScripts]() {
-    for (auto queue = std::min(j - working, scripts.size() - i); queue > 0;
+    for (auto queue = std::min(j - working, runners.size() - i); queue > 0;
          --queue) {
       ++working;
-      scripts[i].start(loop,
-                       [&scripts, &working, &installed, i, &queueScripts]() {
-                         scripts[i].printResult(++installed, scripts.size());
+      runners[i].start(loop,
+                       [&runners, &working, &installed, i, &queueScripts]() {
+                         runners[i].printResult(++installed, runners.size());
                          --working;
                          queueScripts();
                        });
@@ -115,7 +171,7 @@ int cmInstallScriptHandler::install(unsigned int j)
         cmStrCat("install_manifest_", md5.HashString(this->component), ".txt");
     }
   }
-  cmGeneratedFileStream fout(cmStrCat(this->binaryDir, "/", install_manifest));
+  cmGeneratedFileStream fout(cmStrCat(this->binaryDir, '/', install_manifest));
   fout.SetCopyIfDifferent(true);
   for (auto const& dir : this->directories) {
     auto local_manifest = cmStrCat(dir, "/install_local_manifest.txt");
@@ -130,25 +186,23 @@ int cmInstallScriptHandler::install(unsigned int j)
   return 0;
 }
 
-InstallScript::InstallScript(const std::vector<std::string>& cmd)
+InstallScriptRunner::InstallScriptRunner(InstallScript const& script)
 {
   this->name = cmSystemTools::RelativePath(
-    cmSystemTools::GetCurrentWorkingDirectory(), cmd.back());
-  this->command = cmd;
+    cmSystemTools::GetLogicalWorkingDirectory(), script.path);
+  this->command = script.command;
 }
 
-void InstallScript::start(cm::uv_loop_ptr& loop,
-                          std::function<void()> callback)
+void InstallScriptRunner::start(cm::uv_loop_ptr& loop,
+                                std::function<void()> callback)
 {
   cmUVProcessChainBuilder builder;
   builder.AddCommand(this->command)
     .SetExternalLoop(*loop)
     .SetMergedBuiltinStreams();
   this->chain = cm::make_unique<cmUVProcessChain>(builder.Start());
-  this->pipe.init(this->chain->GetLoop(), 0);
-  uv_pipe_open(this->pipe, this->chain->OutputStream());
   this->streamHandler = cmUVStreamRead(
-    this->pipe,
+    this->chain->OutputStream(),
     [this](std::vector<char> data) {
       std::string strdata;
       cmProcessOutput(cmProcessOutput::Auto)
@@ -158,7 +212,7 @@ void InstallScript::start(cm::uv_loop_ptr& loop,
     std::move(callback));
 }
 
-void InstallScript::printResult(std::size_t n, std::size_t total)
+void InstallScriptRunner::printResult(std::size_t n, std::size_t total)
 {
   cmSystemTools::Stdout(cmStrCat('[', n, '/', total, "] ", this->name, '\n'));
   for (auto const& line : this->output) {

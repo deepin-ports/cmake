@@ -78,6 +78,8 @@ set(properties
   "BUILD_WITH_INSTALL_NAME_DIR"             "@rpath/"           "<SAME>"
   ### Install
   "INSTALL_NAME_DIR"                        "@rpath/"           "<SAME>"
+  "INSTALL_OBJECT_NAME_STRATEGY"            "SHORT"             "<SAME>"
+  "INSTALL_OBJECT_ONLY_USE_DESTINATION"     "ON"                "<SAME>"
   "INSTALL_REMOVE_ENVIRONMENT_RPATH"        "ON"                "<SAME>"
   "INSTALL_RPATH"                           "@rpath/"           "<SAME>"
   "INSTALL_RPATH_USE_LINK_PATH"             "ON"                "<SAME>"
@@ -100,7 +102,6 @@ set(properties
   "C_LINKER_LAUNCHER"                       "ccache"            "<SAME>"
   ### C++
   "CXX_LINKER_LAUNCHER"                     "ccache"            "<SAME>"
-  "CXX_MODULE_STD"                          "ON"                "<SAME>"
   ### CUDA
   "CUDA_RESOLVE_DEVICE_SYMBOLS"             "ON"                "<SAME>"
   "CUDA_RUNTIME_LIBRARY"                    "Static"            "<SAME>"
@@ -112,18 +113,21 @@ set(properties
   "OBJCXX_LINKER_LAUNCHER"                  "ccache"            "<SAME>"
 
   # Static analysis
+  "SKIP_LINTING"                            "OFF"               "<SAME>"
   ## C
   "C_CLANG_TIDY"                            "clang-tidy"        "<SAME>"
   "C_CLANG_TIDY_EXPORT_FIXES_DIR"           "${dir}"            "<SAME>"
   "C_CPPLINT"                               "cpplint"           "<SAME>"
   "C_CPPCHECK"                              "cppcheck"          "<SAME>"
   "C_INCLUDE_WHAT_YOU_USE"                  "iwyu"              "<SAME>"
+  "C_PVS_STUDIO"                            "pvs-studio-analyzer" "<SAME>"
   ## C++
   "CXX_CLANG_TIDY"                          "clang-tidy"        "<SAME>"
   "CXX_CLANG_TIDY_EXPORT_FIXES_DIR"         "${dir}"            "<SAME>"
   "CXX_CPPLINT"                             "cpplint"           "<SAME>"
   "CXX_CPPCHECK"                            "cppcheck"          "<SAME>"
   "CXX_INCLUDE_WHAT_YOU_USE"                "iwyu"              "<SAME>"
+  "CXX_PVS_STUDIO"                          "pvs-studio-analyzer" "<SAME>"
   ## Objective C
   "OBJC_CLANG_TIDY"                         "clang-tidy"        "<SAME>"
   "OBJC_CLANG_TIDY_EXPORT_FIXES_DIR"        "${dir}"            "<SAME>"
@@ -194,6 +198,7 @@ if (CMAKE_HOST_APPLE) # compile-guarded in CMake
       "XCODE_SCHEME_UNDEFINED_BEHAVIOUR_SANITIZER"      "ON"          "<SAME>"
       "XCODE_SCHEME_UNDEFINED_BEHAVIOUR_SANITIZER_STOP" "ON"          "<SAME>"
       "XCODE_SCHEME_LAUNCH_CONFIGURATION"               "ON"          "<SAME>"
+      "XCODE_SCHEME_TEST_CONFIGURATION"                 "ON"          "<SAME>"
       "XCODE_SCHEME_ENABLE_GPU_API_VALIDATION"          "ON"          "<SAME>"
       "XCODE_SCHEME_ENABLE_GPU_SHADER_VALIDATION"       "ON"          "<SAME>"
       "XCODE_SCHEME_WORKING_DIRECTORY"                  "ON"          "<SAME>"
@@ -203,6 +208,7 @@ if (CMAKE_HOST_APPLE) # compile-guarded in CMake
       "XCODE_SCHEME_MALLOC_GUARD_EDGES"                 "ON"          "<SAME>"
       "XCODE_SCHEME_GUARD_MALLOC"                       "ON"          "<SAME>"
       "XCODE_SCHEME_LAUNCH_MODE"                        "ON"          "<SAME>"
+      "XCODE_SCHEME_LLDB_INIT_FILE"                     "ON"          "<SAME>"
       "XCODE_SCHEME_ZOMBIE_OBJECTS"                     "ON"          "<SAME>"
       "XCODE_SCHEME_MALLOC_STACK"                       "ON"          "<SAME>"
       "XCODE_SCHEME_DYNAMIC_LINKER_API_USAGE"           "ON"          "<SAME>"
@@ -224,6 +230,15 @@ macro (add_language_properties lang std)
     )
 endmacro ()
 
+set(_cmake_supported_import_std_experimental "")
+cmake_language(GET_EXPERIMENTAL_FEATURE_ENABLED "CxxImportStd" _cmake_supported_import_std_experimental)
+if(_cmake_supported_import_std_experimental)
+  list(APPEND properties
+    # property                      expected  alias
+    "CXX_MODULE_STD"                "ON"      "<SAME>"
+  )
+endif()
+
 # Mock up knowing the standard flag. This doesn't actually build, so nothing
 # should care at this point.
 set(CMAKE_Cc_std_11_STANDARD_COMPILE_OPTION "-std=c11")
@@ -244,6 +259,13 @@ if (CMAKE_GENERATOR MATCHES "Ninja")
         link_pool=1
         pch_pool=1)
 endif ()
+
+# FASTBuild requires that launchers actually be available
+# at configure time
+if(CMAKE_GENERATOR MATCHES FASTBuild)
+  file(TOUCH "${dir}/ccache")
+  file(CHMOD "${dir}/ccache" PERMISSIONS OWNER_READ OWNER_EXECUTE)
+endif()
 
 prepare_target_types(can_compile_sources
   EXECUTABLE SHARED STATIC MODULE OBJECT)

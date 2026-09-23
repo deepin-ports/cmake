@@ -1,5 +1,5 @@
 # Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-# file Copyright.txt or https://cmake.org/licensing for details.
+# file LICENSE.rst or https://cmake.org/licensing for details.
 
 # CPack script for creating Debian package
 # Author: Mathieu Malaterre
@@ -9,9 +9,6 @@
 if(CMAKE_BINARY_DIR)
   message(FATAL_ERROR "CPackDeb.cmake may only be used by CPack internally.")
 endif()
-
-cmake_policy(PUSH)
-cmake_policy(SET CMP0057 NEW) # if IN_LIST
 
 function(cpack_deb_variable_fallback OUTPUT_VAR_NAME)
   set(FALLBACK_VAR_NAMES ${ARGN})
@@ -88,7 +85,7 @@ function(get_sanitized_dirname dirname outvar)
   #       defined in the C++ function `CPackGenerator::GetSanitizedDirOrFileName`!
   set(prohibited_chars_pattern "[<]|[>]|[\"]|[/]|[\\]|[|]|[?]|[*]|[`]")
   if("${dirname}" MATCHES "${prohibited_chars_pattern}")
-    string(MD5 santized_dirname "${dirname}")
+    string(MD5 sanitized_dirname "${dirname}")
     set(${outvar} "${sanitized_dirname}" PARENT_SCOPE)
   else()
     set(${outvar} "${dirname}" PARENT_SCOPE)
@@ -811,6 +808,13 @@ function(cpack_deb_prepare_package_vars)
     string(REGEX REPLACE "\.deb$" "-dbgsym.ddeb" CPACK_DBGSYM_OUTPUT_FILE_NAME "${CPACK_OUTPUT_FILE_NAME}")
   endif()
 
+  if(NOT DEFINED CPACK_DEBIAN_COMPRESSION_LEVEL)
+    set(CPACK_DEBIAN_COMPRESSION_LEVEL "0")
+    if(DEFINED CPACK_COMPRESSION_LEVEL)
+      set(CPACK_DEBIAN_COMPRESSION_LEVEL "${CPACK_COMPRESSION_LEVEL}")
+    endif()
+  endif()
+
   # Print out some debug information if we were asked for that
   if(CPACK_DEBIAN_PACKAGE_DEBUG)
      message("CPackDeb:Debug: CPACK_TOPLEVEL_DIRECTORY          = '${CPACK_TOPLEVEL_DIRECTORY}'")
@@ -823,6 +827,7 @@ function(cpack_deb_prepare_package_vars)
      message("CPackDeb:Debug: CPACK_TEMPORARY_PACKAGE_FILE_NAME = '${CPACK_TEMPORARY_PACKAGE_FILE_NAME}'")
      message("CPackDeb:Debug: CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION = '${CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION}'")
      message("CPackDeb:Debug: CPACK_DEBIAN_PACKAGE_SOURCE       = '${CPACK_DEBIAN_PACKAGE_SOURCE}'")
+     message("CPackDeb:Debug: CPACK_DEBIAN_COMPRESSION_LEVEL       = '${CPACK_DEBIAN_COMPRESSION_LEVEL}'")
   endif()
 
   # For debian source packages:
@@ -852,6 +857,7 @@ function(cpack_deb_prepare_package_vars)
   set(GEN_CPACK_DEBIAN_PACKAGE_DEPENDS "${CPACK_DEBIAN_PACKAGE_DEPENDS}" PARENT_SCOPE)
   set(GEN_CPACK_DEBIAN_ARCHIVE_TYPE "${CPACK_DEBIAN_ARCHIVE_TYPE}" PARENT_SCOPE)
   set(GEN_CPACK_DEBIAN_COMPRESSION_TYPE "${CPACK_DEBIAN_COMPRESSION_TYPE}" PARENT_SCOPE)
+  set(GEN_CPACK_DEBIAN_COMPRESSION_LEVEL "${CPACK_DEBIAN_COMPRESSION_LEVEL}" PARENT_SCOPE)
   set(GEN_CPACK_DEBIAN_PACKAGE_RECOMMENDS "${CPACK_DEBIAN_PACKAGE_RECOMMENDS}" PARENT_SCOPE)
   set(GEN_CPACK_DEBIAN_PACKAGE_SUGGESTS "${CPACK_DEBIAN_PACKAGE_SUGGESTS}" PARENT_SCOPE)
   set(GEN_CPACK_DEBIAN_PACKAGE_HOMEPAGE "${CPACK_DEBIAN_PACKAGE_HOMEPAGE}" PARENT_SCOPE)
@@ -886,5 +892,3 @@ function(cpack_deb_prepare_package_vars)
 endfunction()
 
 cpack_deb_prepare_package_vars()
-
-cmake_policy(POP)

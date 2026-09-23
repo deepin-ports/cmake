@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 
 #include "cmBinUtilsMacOSMachOLinker.h"
 
@@ -54,7 +54,7 @@ bool cmBinUtilsMacOSMachOLinker::Prepare()
 }
 
 auto cmBinUtilsMacOSMachOLinker::GetFileInfo(std::string const& file)
-  -> const FileInfo*
+  -> FileInfo const*
 {
   // Memoize processed rpaths and library dependencies to reduce the number
   // of calls to otool, especially in the case of heavily recursive libraries
@@ -86,7 +86,7 @@ bool cmBinUtilsMacOSMachOLinker::ScanDependencies(
   if (!executableFile.empty()) {
     executablePath = cmSystemTools::GetFilenamePath(executableFile);
   }
-  const FileInfo* file_info = this->GetFileInfo(file);
+  FileInfo const* file_info = this->GetFileInfo(file);
   if (!file_info) {
     return false;
   }
@@ -119,7 +119,7 @@ bool cmBinUtilsMacOSMachOLinker::GetFileDependencies(
             !IsMissingSystemDylib(path)) {
           auto filename = cmSystemTools::GetFilenameName(path);
           bool unique;
-          const FileInfo* dep_file_info = this->GetFileInfo(path);
+          FileInfo const* dep_file_info = this->GetFileInfo(path);
           if (!dep_file_info) {
             return false;
           }
@@ -170,6 +170,7 @@ bool cmBinUtilsMacOSMachOLinker::ResolveDependency(
   } else {
     resolved = true;
     path = name;
+    this->NormalizePath(path);
   }
 
   if (resolved && !cmSystemTools::FileIsFullPath(path)) {
@@ -198,6 +199,7 @@ bool cmBinUtilsMacOSMachOLinker::ResolveExecutablePathDependency(
     return true;
   }
 
+  this->NormalizePath(path);
   resolved = true;
   return true;
 }
@@ -220,6 +222,7 @@ bool cmBinUtilsMacOSMachOLinker::ResolveLoaderPathDependency(
     return true;
   }
 
+  this->NormalizePath(path);
   resolved = true;
   return true;
 }
@@ -252,7 +255,7 @@ bool cmBinUtilsMacOSMachOLinker::ResolveRPathDependency(
       /*
        * paraphrasing @ben.boeckel:
        *  if /b/libB.dylib is supposed to be used,
-       *  /a/libbB.dylib will be found first if it exists. CMake tries to
+       *  /a/libB.dylib will be found first if it exists. CMake tries to
        *  sort rpath directories to avoid this, but sometimes there is no
        *  right answer.
        *
@@ -268,7 +271,9 @@ bool cmBinUtilsMacOSMachOLinker::ResolveRPathDependency(
        *  so as long as this method's resolution guarantees priority
        *  in that manner further checking should not be necessary?
        */
-      path = searchFile;
+      path = std::move(searchFile);
+
+      this->NormalizePath(path);
       resolved = true;
       return true;
     }

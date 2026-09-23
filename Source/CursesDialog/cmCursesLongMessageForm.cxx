@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmCursesLongMessageForm.h"
 
 #include <cstdio>
@@ -17,7 +17,7 @@ inline int ctrl(int z)
 }
 
 cmCursesLongMessageForm::cmCursesLongMessageForm(
-  std::vector<std::string> const& messages, const char* title,
+  std::vector<std::string> const& messages, char const* title,
   ScrollBehavior scrollBehavior)
   : Scrolling(scrollBehavior)
 {
@@ -89,11 +89,11 @@ void cmCursesLongMessageForm::UpdateStatusBar()
   version[width] = '\0';
 
   char fmt_s[] = "%s";
-  curses_move(y - 4, 0);
+  move(y - 4, 0);
   attron(A_STANDOUT);
   printw(fmt_s, bar);
   attroff(A_STANDOUT);
-  curses_move(y - 3, 0);
+  move(y - 3, 0);
   printw(fmt_s, version);
   pos_form_cursor(this->Form);
 }
@@ -110,7 +110,7 @@ void cmCursesLongMessageForm::PrintKeys()
   snprintf(firstLine, sizeof(firstLine), "Press [e] to exit screen");
 
   char fmt_s[] = "%s";
-  curses_move(y - 2, 0);
+  move(y - 2, 0);
   printw(fmt_s, firstLine);
   pos_form_cursor(this->Form);
 }
@@ -148,7 +148,7 @@ void cmCursesLongMessageForm::Render(int /*left*/, int /*top*/, int /*width*/,
   refresh();
 }
 
-void cmCursesLongMessageForm::DrawMessage(const char* msg) const
+void cmCursesLongMessageForm::DrawMessage(char const* msg) const
 {
   int i = 0;
   while (msg[i] != '\0' && i < MAX_CONTENT_SIZE) {

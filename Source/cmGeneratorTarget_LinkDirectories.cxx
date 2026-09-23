@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 /* clang-format off */
 #include "cmGeneratorTarget.h"
 /* clang-format on */
@@ -14,8 +14,8 @@
 #include <cmext/algorithm>
 
 #include "cmEvaluatedTargetProperty.h"
+#include "cmGenExContext.h"
 #include "cmGeneratorExpressionDAGChecker.h"
-#include "cmGlobalGenerator.h"
 #include "cmLinkItem.h"
 #include "cmList.h"
 #include "cmListFileCache.h"
@@ -36,7 +36,7 @@ void processLinkDirectories(cmGeneratorTarget const* tgt,
                             bool debugDirectories)
 {
   for (EvaluatedTargetPropertyEntry& entry : entries.Entries) {
-    cmLinkImplItem const& item = entry.LinkImplItem;
+    cmLinkItem const& item = entry.LinkItem;
     std::string const& targetName = item.AsStr();
 
     std::string usedDirectories;
@@ -60,8 +60,6 @@ void processLinkDirectories(cmGeneratorTarget const* tgt,
             case cmPolicies::OLD:
               noMessage = true;
               break;
-            case cmPolicies::REQUIRED_IF_USED:
-            case cmPolicies::REQUIRED_ALWAYS:
             case cmPolicies::NEW:
               // Issue the fatal message.
               break;
@@ -84,15 +82,15 @@ void processLinkDirectories(cmGeneratorTarget const* tgt,
       if (uniqueDirectories.insert(entryDirectory).second) {
         directories.emplace_back(entryDirectory, entry.Backtrace);
         if (debugDirectories) {
-          usedDirectories += " * " + entryDirectory + "\n";
+          usedDirectories += cmStrCat(" * ", entryDirectory, '\n');
         }
       }
     }
     if (!usedDirectories.empty()) {
       tgt->GetLocalGenerator()->GetCMakeInstance()->IssueMessage(
         MessageType::LOG,
-        std::string("Used link directories for target ") + tgt->GetName() +
-          ":\n" + usedDirectories,
+        cmStrCat("Used link directories for target ", tgt->GetName(), ":\n",
+                 usedDirectories),
         entry.Backtrace);
     }
   }
@@ -100,8 +98,8 @@ void processLinkDirectories(cmGeneratorTarget const* tgt,
 }
 
 void cmGeneratorTarget::GetLinkDirectories(std::vector<std::string>& result,
-                                           const std::string& config,
-                                           const std::string& language) const
+                                           std::string const& config,
+                                           std::string const& language) const
 {
   std::vector<BT<std::string>> tmp =
     this->GetLinkDirectories(config, language);
@@ -125,23 +123,23 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetLinkDirectories(
   std::vector<BT<std::string>> result;
   std::unordered_set<std::string> uniqueDirectories;
 
-  cmGeneratorExpressionDAGChecker dagChecker(
-    this, "LINK_DIRECTORIES", nullptr, nullptr, this->LocalGenerator, config);
+  cm::GenEx::Context context(this->LocalGenerator, config, language);
+  cmGeneratorExpressionDAGChecker dagChecker{
+    this, "LINK_DIRECTORIES", nullptr, nullptr, context,
+  };
 
   cmList debugProperties{ this->Makefile->GetDefinition(
     "CMAKE_DEBUG_TARGET_PROPERTIES") };
   bool debugDirectories = !this->DebugLinkDirectoriesDone &&
     cm::contains(debugProperties, "LINK_DIRECTORIES");
 
-  if (this->GlobalGenerator->GetConfigureDoneCMP0026()) {
-    this->DebugLinkDirectoriesDone = true;
-  }
+  this->DebugLinkDirectoriesDone = true;
 
   EvaluatedTargetPropertyEntries entries = EvaluateTargetPropertyEntries(
-    this, config, language, &dagChecker, this->LinkDirectoriesEntries);
+    this, context, &dagChecker, this->LinkDirectoriesEntries);
 
-  AddInterfaceEntries(this, config, "INTERFACE_LINK_DIRECTORIES", language,
-                      &dagChecker, entries, IncludeRuntimeInterface::Yes,
+  AddInterfaceEntries(this, "INTERFACE_LINK_DIRECTORIES", context, &dagChecker,
+                      entries, IncludeRuntimeInterface::Yes,
                       this->GetPolicyStatusCMP0099() == cmPolicies::NEW
                         ? UseTo::Link
                         : UseTo::Compile);

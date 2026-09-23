@@ -4,6 +4,10 @@
     "directorySource": "^custom$",
     "projectName": "Custom",
     "type": "UTILITY",
+    "imported": null,
+    "local": null,
+    "abstract": null,
+    "symbolic": null,
     "isGeneratorProvided": null,
     "fileSets": null,
     "sources": [
@@ -44,18 +48,21 @@
             ]
         }
     ],
+    "interfaceSources": null,
     "sourceGroups": [
         {
             "name": "",
             "sourcePaths": [
                 "^.*/Tests/RunCMake/FileAPI/codemodel-v2-build/custom/CMakeFiles/custom_tgt(-(Debug|Release|RelWithDebInfo|MinSizeRel))?$"
-            ]
+            ],
+            "interfaceSourcePaths": null
         },
         {
             "name": "CMake Rules",
             "sourcePaths": [
                 "^.*/Tests/RunCMake/FileAPI/codemodel-v2-build/(custom/)?CMakeFiles/([0-9a-f]+/)?custom_tgt(-\\(CONFIG\\))?\\.rule$"
-            ]
+            ],
+            "interfaceSourcePaths": null
         }
     ],
     "compileGroups": null,
@@ -86,5 +93,11 @@
             "id": "^ZERO_CHECK::@c11385ffed57b860da63$",
             "backtrace": null
         }
-    ]
+    ],
+    "linkLibraries": null,
+    "interfaceLinkLibraries": null,
+    "compileDependencies": null,
+    "interfaceCompileDependencies": null,
+    "objectDependencies": null,
+    "orderDependencies": null
 }

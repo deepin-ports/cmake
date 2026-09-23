@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmCPackDebGenerator.h"
 
 #include <algorithm>
@@ -32,8 +32,8 @@ class DebGenerator
 public:
   DebGenerator(cmCPackLog* logger, std::string outputName, std::string workDir,
                std::string topLevelDir, std::string temporaryDir,
-               cmValue debianCompressionType, cmValue numThreads,
-               cmValue debianArchiveType,
+               cmValue debianCompressionType, cmValue debianCompressionLevel,
+               cmValue numThreads, cmValue debianArchiveType,
                std::map<std::string, std::string> controlValues,
                bool genShLibs, std::string shLibsFilename, bool genPostInst,
                std::string postInst, bool genPostRm, std::string postRm,
@@ -51,34 +51,36 @@ private:
   bool generateDeb() const;
 
   cmCPackLog* Logger;
-  const std::string OutputName;
-  const std::string WorkDir;
+  std::string const OutputName;
+  std::string const WorkDir;
   std::string CompressionSuffix;
-  const std::string TopLevelDir;
-  const std::string TemporaryDir;
-  const std::string DebianArchiveType;
+  std::string const TopLevelDir;
+  std::string const TemporaryDir;
+  std::string const DebianArchiveType;
   long NumThreads;
-  const std::map<std::string, std::string> ControlValues;
-  const bool GenShLibs;
-  const std::string ShLibsFilename;
-  const bool GenPostInst;
-  const std::string PostInst;
-  const bool GenPostRm;
-  const std::string PostRm;
+  std::map<std::string, std::string> const ControlValues;
+  bool const GenShLibs;
+  std::string const ShLibsFilename;
+  bool const GenPostInst;
+  std::string const PostInst;
+  bool const GenPostRm;
+  std::string const PostRm;
   cmValue ControlExtra;
-  const bool PermissionStrictPolicy;
-  const std::vector<std::string> PackageFiles;
+  bool const PermissionStrictPolicy;
+  std::vector<std::string> const PackageFiles;
   cmArchiveWrite::Compress TarCompressionType;
+  int CompressionLevel = 0;
 };
 
 DebGenerator::DebGenerator(
   cmCPackLog* logger, std::string outputName, std::string workDir,
   std::string topLevelDir, std::string temporaryDir,
-  cmValue debCompressionType, cmValue numThreads, cmValue debianArchiveType,
-  std::map<std::string, std::string> controlValues, bool genShLibs,
-  std::string shLibsFilename, bool genPostInst, std::string postInst,
-  bool genPostRm, std::string postRm, cmValue controlExtra,
-  bool permissionStrictPolicy, std::vector<std::string> packageFiles)
+  cmValue debCompressionType, cmValue debCompressionLevel, cmValue numThreads,
+  cmValue debianArchiveType, std::map<std::string, std::string> controlValues,
+  bool genShLibs, std::string shLibsFilename, bool genPostInst,
+  std::string postInst, bool genPostRm, std::string postRm,
+  cmValue controlExtra, bool permissionStrictPolicy,
+  std::vector<std::string> packageFiles)
   : Logger(logger)
   , OutputName(std::move(outputName))
   , WorkDir(std::move(workDir))
@@ -135,6 +137,19 @@ DebGenerator::DebGenerator(
   } else {
     this->NumThreads = 1;
   }
+
+  if (debCompressionLevel) {
+    long compressionLevel;
+    if (!cmStrToLong(*debCompressionLevel, &compressionLevel)) {
+      compressionLevel = 0;
+      cmCPackLogger(cmCPackLog::LOG_ERROR,
+                    "Unrecognized compression level: " << debCompressionLevel
+                                                       << std::endl);
+    }
+    this->CompressionLevel = static_cast<int>(compressionLevel);
+  } else {
+    this->CompressionLevel = 0;
+  }
 }
 
 bool DebGenerator::generate() const
@@ -154,7 +169,7 @@ bool DebGenerator::generate() const
 void DebGenerator::generateDebianBinaryFile() const
 {
   // debian-binary file
-  const std::string dbfilename = this->WorkDir + "/debian-binary";
+  std::string const dbfilename = this->WorkDir + "/debian-binary";
   cmGeneratedFileStream out;
   out.Open(dbfilename, false, true);
   out << "2.0\n"; // required for valid debian package
@@ -176,7 +191,7 @@ void DebGenerator::generateControlFile() const
       totalSize += cmSystemTools::FileLength(file);
     }
   }
-  out << "Installed-Size: " << (totalSize + 1023) / 1024 << "\n\n";
+  out << "Installed-Size: " << (totalSize + 1023) / 1024 << "\n";
 }
 
 bool DebGenerator::generateDataTar() const
@@ -192,7 +207,7 @@ bool DebGenerator::generateDataTar() const
     return false;
   }
   cmArchiveWrite data_tar(fileStream_data_tar, this->TarCompressionType,
-                          this->DebianArchiveType, 0,
+                          this->DebianArchiveType, this->CompressionLevel,
                           static_cast<int>(this->NumThreads));
   if (!data_tar.Open()) {
     cmCPackLogger(cmCPackLog::LOG_ERROR,
@@ -312,7 +327,8 @@ std::string DebGenerator::generateMD5File() const
 
 bool DebGenerator::generateControlTar(std::string const& md5Filename) const
 {
-  std::string filename_control_tar = this->WorkDir + "/control.tar.gz";
+  std::string filename_control_tar =
+    this->WorkDir + "/control.tar" + this->CompressionSuffix;
 
   cmGeneratedFileStream fileStream_control_tar;
   fileStream_control_tar.Open(filename_control_tar, false, true);
@@ -322,9 +338,8 @@ bool DebGenerator::generateControlTar(std::string const& md5Filename) const
                     << filename_control_tar << "\" for writing" << std::endl);
     return false;
   }
-  cmArchiveWrite control_tar(fileStream_control_tar,
-                             cmArchiveWrite::CompressGZip,
-                             this->DebianArchiveType);
+  cmArchiveWrite control_tar(fileStream_control_tar, this->TarCompressionType,
+                             this->DebianArchiveType, this->CompressionLevel);
   if (!control_tar.Open()) {
     cmCPackLogger(cmCPackLog::LOG_ERROR,
                   "Error opening the archive \""
@@ -342,9 +357,9 @@ bool DebGenerator::generateControlTar(std::string const& md5Filename) const
   and
   https://lintian.debian.org/tags/control-file-has-bad-permissions.html
   */
-  const mode_t permission644 = 0644;
-  const mode_t permissionExecute = 0111;
-  const mode_t permission755 = permission644 | permissionExecute;
+  mode_t const permission644 = 0644;
+  mode_t const permissionExecute = 0111;
+  mode_t const permission755 = permission644 | permissionExecute;
 
   // for md5sum and control (that we have generated here), we use 644
   // (RW-R--R--)
@@ -420,7 +435,7 @@ bool DebGenerator::generateControlTar(std::string const& md5Filename) const
   if (this->ControlExtra) {
     // permissions are now controlled by the original file permissions
 
-    static const char* strictFiles[] = { "config", "postinst", "postrm",
+    static char const* strictFiles[] = { "config", "postinst", "postrm",
                                          "preinst", "prerm" };
     std::set<std::string> setStrictFiles(
       strictFiles, strictFiles + sizeof(strictFiles) / sizeof(strictFiles[0]));
@@ -484,7 +499,8 @@ bool DebGenerator::generateDeb() const
   deb.SetUNAMEAndGNAME("root", "root");
 
   if (!deb.Add(tlDir + "debian-binary", tlDir.length()) ||
-      !deb.Add(tlDir + "control.tar.gz", tlDir.length()) ||
+      !deb.Add(tlDir + "control.tar" + this->CompressionSuffix,
+               tlDir.length()) ||
       !deb.Add(tlDir + "data.tar" + this->CompressionSuffix, tlDir.length())) {
     cmCPackLogger(cmCPackLog::LOG_ERROR,
                   "Error creating debian package:\n"
@@ -501,7 +517,7 @@ bool DebGenerator::generateDeb() const
   return true;
 }
 
-std::vector<std::string> findFilesIn(const std::string& path)
+std::vector<std::string> findFilesIn(std::string const& path)
 {
   cmsys::Glob gl;
   std::string findExpr = path + "/*";
@@ -614,7 +630,7 @@ int cmCPackDebGenerator::PackageComponents(bool ignoreGroup)
 
 //----------------------------------------------------------------------
 int cmCPackDebGenerator::PackageComponentsAllInOne(
-  const std::string& compInstDirName)
+  std::string const& compInstDirName)
 {
   /* Reset package file name list it will be populated during the
    * component packaging run*/
@@ -684,12 +700,12 @@ int cmCPackDebGenerator::PackageFiles()
 
 bool cmCPackDebGenerator::createDebPackages()
 {
-  auto make_package = [this](const std::string& path,
-                             const char* const output_var,
+  auto make_package = [this](std::string const& path,
+                             char const* const output_var,
                              bool (cmCPackDebGenerator::*creator)()) -> bool {
     try {
       this->packageFiles = findFilesIn(path);
-    } catch (const std::runtime_error& ex) {
+    } catch (std::runtime_error const& ex) {
       cmCPackLogger(cmCPackLog::LOG_ERROR, ex.what() << std::endl);
       return false;
     }
@@ -805,12 +821,12 @@ bool cmCPackDebGenerator::createDeb()
     controlValues["Multi-Arch"] = *debian_pkg_multiarch;
   }
 
-  const std::string strGenWDIR(this->GetOption("GEN_WDIR"));
-  const std::string shlibsfilename = strGenWDIR + "/shlibs";
+  std::string const strGenWDIR(this->GetOption("GEN_WDIR"));
+  std::string const shlibsfilename = strGenWDIR + "/shlibs";
 
   cmValue debian_pkg_shlibs =
     this->GetOption("GEN_CPACK_DEBIAN_PACKAGE_SHLIBS");
-  const bool gen_shibs = this->IsOn("CPACK_DEBIAN_PACKAGE_GENERATE_SHLIBS") &&
+  bool const gen_shibs = this->IsOn("CPACK_DEBIAN_PACKAGE_GENERATE_SHLIBS") &&
     cmNonempty(debian_pkg_shlibs);
   if (gen_shibs) {
     cmGeneratedFileStream out;
@@ -819,8 +835,8 @@ bool cmCPackDebGenerator::createDeb()
     out << '\n';
   }
 
-  const std::string postinst = strGenWDIR + "/postinst";
-  const std::string postrm = strGenWDIR + "/postrm";
+  std::string const postinst = strGenWDIR + "/postinst";
+  std::string const postrm = strGenWDIR + "/postrm";
   if (this->IsOn("GEN_CPACK_DEBIAN_GENERATE_POSTINST")) {
     cmGeneratedFileStream out;
     out.Open(postinst, false, true);
@@ -845,6 +861,7 @@ bool cmCPackDebGenerator::createDeb()
     this->GetOption("CPACK_TOPLEVEL_DIRECTORY"),
     this->GetOption("CPACK_TEMPORARY_DIRECTORY"),
     this->GetOption("GEN_CPACK_DEBIAN_COMPRESSION_TYPE"),
+    this->GetOption("GEN_CPACK_DEBIAN_COMPRESSION_LEVEL"),
     this->GetOption("CPACK_THREADS"),
     this->GetOption("GEN_CPACK_DEBIAN_ARCHIVE_TYPE"), controlValues, gen_shibs,
     shlibsfilename, this->IsOn("GEN_CPACK_DEBIAN_GENERATE_POSTINST"), postinst,
@@ -900,6 +917,7 @@ bool cmCPackDebGenerator::createDbgsymDDeb()
     this->GetOption("CPACK_TOPLEVEL_DIRECTORY"),
     this->GetOption("CPACK_TEMPORARY_DIRECTORY"),
     this->GetOption("GEN_CPACK_DEBIAN_COMPRESSION_TYPE"),
+    this->GetOption("GEN_CPACK_DEBIAN_COMPRESSION_LEVEL"),
     this->GetOption("CPACK_THREADS"),
     this->GetOption("GEN_CPACK_DEBIAN_ARCHIVE_TYPE"), controlValues, false, "",
     false, "", false, "", nullptr,
@@ -915,7 +933,7 @@ bool cmCPackDebGenerator::SupportsComponentInstallation() const
 }
 
 std::string cmCPackDebGenerator::GetComponentInstallSuffix(
-  const std::string& componentName)
+  std::string const& componentName)
 {
   if (this->componentPackageMethod == ONE_PACKAGE_PER_COMPONENT) {
     return componentName;
@@ -928,14 +946,14 @@ std::string cmCPackDebGenerator::GetComponentInstallSuffix(
   // the current COMPONENT belongs to.
   std::string groupVar =
     "CPACK_COMPONENT_" + cmSystemTools::UpperCase(componentName) + "_GROUP";
-  if (this->GetOption(groupVar)) {
-    return *this->GetOption(groupVar);
+  if (cmValue v = this->GetOption(groupVar)) {
+    return *v;
   }
   return componentName;
 }
 
 std::string cmCPackDebGenerator::GetComponentInstallDirNameSuffix(
-  const std::string& componentName)
+  std::string const& componentName)
 {
   return this->GetSanitizedDirOrFileName(
     this->GetComponentInstallSuffix(componentName));

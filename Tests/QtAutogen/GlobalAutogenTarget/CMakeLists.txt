@@ -18,10 +18,10 @@ set(MCB "sdb/sdb_autogen/mocs_compilation*.cpp")
 set(MCC "sdc/sdc_autogen/mocs_compilation*.cpp")
 set(MCG "gat_autogen/mocs_compilation*.cpp")
 
-set(DRA "sda/sda_autogen/*qrc_data.cpp")
-set(DRB "sdb/sdb_autogen/*qrc_data.cpp")
-set(DRC "sdc/sdc_autogen/*qrc_data.cpp")
-set(DRG "gat_autogen/*qrc_data.cpp")
+set(DRA "sda/sda_autogen/*qrc_data*.cpp")
+set(DRB "sdb/sdb_autogen/*qrc_data*.cpp")
+set(DRC "sdc/sdc_autogen/*qrc_data*.cpp")
+set(DRG "gat_autogen/*qrc_data*.cpp")
 
 # -- Utility macros
 macro(GAT_FIND_FILES VAR NAME)
@@ -76,6 +76,7 @@ execute_process(
         "-DCMAKE_AUTOGEN_VERBOSE=${CMAKE_AUTOGEN_VERBOSE}"
         "-DCMAKE_PREFIX_PATH:STRING=${CMAKE_PREFIX_PATH}"
         "-DQT_QMAKE_EXECUTABLE:FILEPATH=${QT_QMAKE_EXECUTABLE}"
+        -DCMAKE_AUTOGEN_INTERMEDIATE_DIR_STRATEGY:STRING=FULL
     WORKING_DIRECTORY "${GAT_BDIR}"
     OUTPUT_VARIABLE output
     RESULT_VARIABLE result)

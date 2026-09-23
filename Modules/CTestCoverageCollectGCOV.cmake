@@ -1,5 +1,5 @@
 # Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-# file Copyright.txt or https://cmake.org/licensing for details.
+# file LICENSE.rst or https://cmake.org/licensing for details.
 
 #[=======================================================================[.rst:
 CTestCoverageCollectGCOV
@@ -7,61 +7,121 @@ CTestCoverageCollectGCOV
 
 .. versionadded:: 3.2
 
-This module provides the ``ctest_coverage_collect_gcov`` function.
+This module is intended for use in CTest dashboard scripts and provides a
+command to generate a tarball containing code coverage reports.
 
-This function runs gcov on all .gcda files found in the binary tree
-and packages the resulting .gcov files into a tar file.
-This tarball also contains the following:
+Load this module in a CTest script with:
 
-* *data.json* defines the source and build directories for use by CDash.
-* *Labels.json* indicates any :prop_sf:`LABELS` that have been set on the
-  source files.
-* The *uncovered* directory holds any uncovered files found by
-  :variable:`CTEST_EXTRA_COVERAGE_GLOB`.
+.. code-block:: cmake
 
-After generating this tar file, it can be sent to CDash for display with the
-:command:`ctest_submit(CDASH_UPLOAD)` command.
+  include(CTestCoverageCollectGCOV)
+
+Commands
+^^^^^^^^
+
+This module provides the following command:
 
 .. command:: ctest_coverage_collect_gcov
 
-  ::
+  Runs ``gcov`` and packages a tar file for CDash:
 
-    ctest_coverage_collect_gcov(TARBALL <tarfile>
-      [SOURCE <source_dir>][BUILD <build_dir>]
-      [GCOV_COMMAND <gcov_command>]
+  .. code-block:: cmake
+
+    ctest_coverage_collect_gcov(
+      TARBALL <tar-file>
+      [TARBALL_COMPRESSION <compression>]
+      [SOURCE <source-dir>]
+      [BUILD <build-dir>]
+      [GCOV_COMMAND <gcov-command>]
       [GCOV_OPTIONS <options>...]
-      )
+      [GLOB]
+      [DELETE]
+      [QUIET]
+    )
 
-  Run gcov and package a tar file for CDash.  The options are:
+  This command runs ``gcov`` on all ``.gcda`` files found in the binary tree
+  and packages the resulting ``.gcov`` files into a tar file, along with the
+  following:
 
-  ``TARBALL <tarfile>``
+  * *data.json* file that defines the source and build directories for use
+    by CDash.
+  * *Labels.json* files that indicate any :prop_sf:`LABELS` that have been
+    set on the source files.
+  * The *uncovered* directory containing any uncovered files found by
+    :variable:`CTEST_EXTRA_COVERAGE_GLOB`.
+
+  The resulting tar file can be submitted to CDash for display using the
+  :command:`ctest_submit(CDASH_UPLOAD)` command.
+
+  The arguments are:
+
+  ``TARBALL <tar-file>``
     Specify the location of the ``.tar`` file to be created for later
     upload to CDash.  Relative paths will be interpreted with respect
     to the top-level build directory.
 
-  ``TARBALL_COMPRESSION <option>``
+  ``TARBALL_COMPRESSION <compression>``
     .. versionadded:: 3.18
 
     Specify a compression algorithm for the
     ``TARBALL`` data file.  Using this option reduces the size of the data file
-    before it is submitted to CDash.  ``<option>`` must be one of ``GZIP``,
-    ``BZIP2``, ``XZ``, ``ZSTD``, ``FROM_EXT``, or an expression that CMake
-    evaluates as ``FALSE``. The default value is ``BZIP2``.
+    before it is submitted to CDash.
+    ``<compression>`` should be one of the following:
+
+    * ``GZIP``
+    * ``BZIP2``
+    * ``LZMA``
+
+      .. versionadded:: 4.3
+
+    * ``LZMA2``
+
+      .. versionadded:: 4.3
+
+      This is an alias for ``XZ``.
+
+    * ``XZ``
+    * ``ZSTD``
+    * ``FROM_EXT``
+    * An expression that CMake evaluates as ``FALSE``
+
+    The default value is ``BZIP2``.
 
     If ``FROM_EXT`` is specified, the resulting file will be compressed based on
-    the file extension of the ``<tarfile>`` (i.e. ``.tar.gz`` will use ``GZIP``
-    compression). File extensions that will produce compressed output include
-    ``.tar.gz``, ``.tgz``, ``.tar.bzip2``, ``.tbz``, ``.tar.xz``, and ``.txz``.
+    the file extension of the ``<tar-file>`` (i.e. ``.tar.gz`` will use ``GZIP``
+    compression). File extensions that will produce compressed output include:
 
-  ``SOURCE <source_dir>``
+    * ``.tar.gz``
+    * ``.tgz``
+    * ``.tar.bzip2``
+    * ``.tbz``
+    * ``.tar.xz``
+    * ``.txz``
+    * ``.tar.lzma``
+
+      .. versionadded:: 4.3
+
+    * ``.tlzma``
+
+      .. versionadded:: 4.3
+
+    * ``.tar.zst``
+
+      .. versionadded:: 4.3
+
+    * ``.tzst``
+
+      .. versionadded:: 4.3
+
+  ``SOURCE <source-dir>``
     Specify the top-level source directory for the build.
     Default is the value of :variable:`CTEST_SOURCE_DIRECTORY`.
 
-  ``BUILD <build_dir>``
+  ``BUILD <build-dir>``
     Specify the top-level build directory for the build.
     Default is the value of :variable:`CTEST_BINARY_DIRECTORY`.
 
-  ``GCOV_COMMAND <gcov_command>``
+  ``GCOV_COMMAND <gcov-command>``
     Specify the full path to the ``gcov`` command on the machine.
     Default is the value of :variable:`CTEST_COVERAGE_COMMAND`.
 
@@ -73,21 +133,37 @@ After generating this tar file, it can be sent to CDash for display with the
   ``GLOB``
     .. versionadded:: 3.6
 
-    Recursively search for .gcda files in build_dir rather than
-    determining search locations by reading TargetDirectories.txt.
+    Recursively search for ``.gcda`` files in ``<build-dir>`` rather than
+    determining search locations by reading ``CMakeFiles/TargetDirectories.txt``
+    (file generated by CMake at the generation phase).
 
   ``DELETE``
     .. versionadded:: 3.6
 
-    Delete coverage files after they've been packaged into the .tar.
+    Delete coverage files after they've been packaged into the ``.tar``.
 
   ``QUIET``
     Suppress non-error messages that otherwise would have been
-    printed out by this function.
+    printed out by this command.
 
   .. versionadded:: 3.3
     Added support for the :variable:`CTEST_CUSTOM_COVERAGE_EXCLUDE` variable.
 
+Examples
+^^^^^^^^
+
+Generating code coverage data packaged as a ``.tar.gz`` file in a
+:option:`ctest -S` script:
+
+.. code-block:: cmake
+  :caption: ``script.cmake``
+
+  include(CTestCoverageCollectGCOV)
+
+  ctest_coverage_collect_gcov(
+    TARBALL "${CTEST_BINARY_DIRECTORY}/gcov.tar.gz"
+    TARBALL_COMPRESSION "GZIP"
+  )
 #]=======================================================================]
 
 function(ctest_coverage_collect_gcov)
@@ -115,12 +191,12 @@ function(ctest_coverage_collect_gcov)
   else()
     set(gcov_command "${GCOV_GCOV_COMMAND}")
   endif()
+  set(supported_compressions "GZIP" "BZIP2" "LZMA" "LZMA2" "XZ" "ZSTD" "FROM_EXT")
   if(NOT DEFINED GCOV_TARBALL_COMPRESSION)
     set(GCOV_TARBALL_COMPRESSION "BZIP2")
   elseif( GCOV_TARBALL_COMPRESSION AND
-      NOT GCOV_TARBALL_COMPRESSION MATCHES "^(GZIP|BZIP2|XZ|ZSTD|FROM_EXT)$")
-    message(FATAL_ERROR "TARBALL_COMPRESSION must be one of OFF, GZIP, "
-      "BZIP2, XZ, ZSTD, or FROM_EXT for ctest_coverage_collect_gcov")
+      NOT GCOV_TARBALL_COMPRESSION IN_LIST supported_compressions)
+    message(FATAL_ERROR "TARBALL_COMPRESSION must be OFF or one of ${supported_compressions} for ctest_coverage_collect_gcov")
   endif()
   # run gcov on each gcda file in the binary tree
   set(gcda_files)
@@ -304,6 +380,7 @@ ${uncovered_files_for_tar}
   # Prepare tar command line arguments
 
   set(tar_opts "")
+  set(zstd_tar_opt "")
   # Select data compression mode
   if( GCOV_TARBALL_COMPRESSION STREQUAL "FROM_EXT")
     if( GCOV_TARBALL MATCHES [[\.(tgz|tar.gz)$]] )
@@ -312,15 +389,21 @@ ${uncovered_files_for_tar}
       string(APPEND tar_opts "J")
     elseif( GCOV_TARBALL MATCHES [[\.(tbz|tar.bz)$]] )
       string(APPEND tar_opts "j")
+    elseif( GCOV_TARBALL MATCHES [[\.(tlzma|tar.lzma)$]] )
+      set(zstd_tar_opt "--lzma")
+    elseif( GCOV_TARBALL MATCHES [[\.(tzst|tar.zst)$]] )
+      set(zstd_tar_opt "--zstd")
     endif()
   elseif(GCOV_TARBALL_COMPRESSION STREQUAL "GZIP")
     string(APPEND tar_opts "z")
-  elseif(GCOV_TARBALL_COMPRESSION STREQUAL "XZ")
+  elseif((GCOV_TARBALL_COMPRESSION STREQUAL "XZ") OR (GCOV_TARBALL_COMPRESSION STREQUAL "LZMA2"))
     string(APPEND tar_opts "J")
   elseif(GCOV_TARBALL_COMPRESSION STREQUAL "BZIP2")
     string(APPEND tar_opts "j")
   elseif(GCOV_TARBALL_COMPRESSION STREQUAL "ZSTD")
     set(zstd_tar_opt "--zstd")
+  elseif(GCOV_TARBALL_COMPRESSION STREQUAL "LZMA")
+    set(zstd_tar_opt "--lzma")
   endif()
   # Verbosity options
   if(NOT GCOV_QUIET AND NOT tar_opts MATCHES v)

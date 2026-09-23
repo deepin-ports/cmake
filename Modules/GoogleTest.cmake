@@ -1,5 +1,5 @@
 # Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-# file Copyright.txt or https://cmake.org/licensing for details.
+# file LICENSE.rst or https://cmake.org/licensing for details.
 
 #[=======================================================================[.rst:
 GoogleTest
@@ -7,9 +7,16 @@ GoogleTest
 
 .. versionadded:: 3.9
 
-This module defines functions to help use the Google Test infrastructure.  Two
-mechanisms for adding tests are provided. :command:`gtest_add_tests` has been
-around for some time, originally via ``find_package(GTest)``.
+This module provides commands to help use the Google Test infrastructure.
+
+Load this module in a CMake project with:
+
+.. code-block:: cmake
+
+  include(GoogleTest)
+
+Two mechanisms for adding tests are provided. :command:`gtest_add_tests` has
+been around for some time, originally via ``find_package(GTest)``.
 :command:`gtest_discover_tests` was introduced in CMake 3.10.
 
 The (older) :command:`gtest_add_tests` scans source files to identify tests.
@@ -38,7 +45,9 @@ same as the Google Test name (i.e. ``suite.testcase``); see also
 .. command:: gtest_add_tests
 
   Automatically add tests with CTest by scanning source code for Google Test
-  macros::
+  macros:
+
+  .. code-block:: cmake
 
     gtest_add_tests(TARGET target
                     [SOURCES src1...]
@@ -127,15 +136,17 @@ same as the Google Test name (i.e. ``suite.testcase``); see also
     set_tests_properties(${noArgsTests}   PROPERTIES TIMEOUT 10)
     set_tests_properties(${withArgsTests} PROPERTIES TIMEOUT 20)
 
-  For backward compatibility, the following form is also supported::
+  For backward compatibility, the following form is also supported:
+
+  .. code-block:: cmake
 
     gtest_add_tests(exe args files...)
 
   ``exe``
     The path to the test executable or the name of a CMake target.
   ``args``
-    A ;-list of extra arguments to be passed to executable.  The entire
-    list must be passed as a single argument.  Enclose it in quotes,
+    A semicolon-separated list of extra arguments to be passed to executable.
+    The entire list must be passed as a single argument.  Enclose it in quotes,
     or pass ``""`` for no arguments.
   ``files...``
     A list of source files to search for tests and test fixtures.
@@ -152,7 +163,9 @@ same as the Google Test name (i.e. ``suite.testcase``); see also
 .. command:: gtest_discover_tests
 
   Automatically add tests with CTest by querying the compiled test executable
-  for available tests::
+  for available tests:
+
+  .. code-block:: cmake
 
     gtest_discover_tests(target
                          [EXTRA_ARGS args...]
@@ -319,7 +332,7 @@ same as the Google Test name (i.e. ``suite.testcase``); see also
 
 # Save project's policies
 block(SCOPE_FOR POLICIES)
-cmake_policy(VERSION 3.30)
+cmake_policy(VERSION 4.2)
 
 #------------------------------------------------------------------------------
 function(gtest_add_tests)
@@ -400,9 +413,9 @@ function(gtest_add_tests)
     message(FATAL_ERROR "${arg_TARGET} does not define an existing CMake target")
   endif()
   if(NOT arg_WORKING_DIRECTORY)
-    unset(workDir)
+    unset(maybe_WORKING_DIRECTORY)
   else()
-    set(workDir WORKING_DIRECTORY "${arg_WORKING_DIRECTORY}")
+    set(maybe_WORKING_DIRECTORY "WORKING_DIRECTORY \${arg_WORKING_DIRECTORY}")
   endif()
 
   if(NOT arg_SOURCES)
@@ -433,10 +446,10 @@ function(gtest_add_tests)
     set(accumulated "")
     # Iterate over each line in the file so that we know the line number of a test definition
     foreach(line_str IN LISTS content_lines)
-      MATH(EXPR line "${line}+1")
+      math(EXPR line "${line}+1")
       # Check if the current line is the start of a test definition
-      string(REGEX MATCH "[ \t]*${gtest_test_type_regex}[ \t]*[\\(]*" accumlate_start_hit "${line_str}")
-      if(accumlate_start_hit)
+      string(REGEX MATCH "[ \t]*${gtest_test_type_regex}[ \t]*[\\(]*" accumulate_start_hit "${line_str}")
+      if(accumulate_start_hit)
         set(accumulate_line "${line}")
       endif()
       # Append the current line to the accumulated string
@@ -492,11 +505,11 @@ function(gtest_add_tests)
               ${arg_TEST_PREFIX}${orig_test_name}${arg_TEST_SUFFIX}
           )
           cmake_language(EVAL CODE "
-            add_test(NAME ${ctest_test_name}
-                     ${workDir}
-                     COMMAND ${arg_TARGET}
+            add_test(NAME \${ctest_test_name}
+                     ${maybe_WORKING_DIRECTORY}
+                     COMMAND \${arg_TARGET}
                        --gtest_also_run_disabled_tests
-                       --gtest_filter=${gtest_test_name}
+                       --gtest_filter=\${gtest_test_name}
                        ${extra_args}
                      __CMP0178 [==[${cmp0178}]==]
             )"
@@ -508,10 +521,10 @@ function(gtest_add_tests)
       else()
         set(ctest_test_name ${arg_TEST_PREFIX}${gtest_test_name}${arg_TEST_SUFFIX})
         cmake_language(EVAL CODE "
-          add_test(NAME ${ctest_test_name}
-                   ${workDir}
-                   COMMAND ${arg_TARGET}
-                     --gtest_filter=${gtest_test_name}
+          add_test(NAME \${ctest_test_name}
+                   ${maybe_WORKING_DIRECTORY}
+                   COMMAND \${arg_TARGET}
+                     --gtest_filter=\${gtest_test_name}
                      ${extra_args}
                    __CMP0178 [==[${cmp0178}]==]
           )"
@@ -630,11 +643,21 @@ function(gtest_discover_tests target)
     PARENT_SCOPE # undocumented, do not use outside of CMake
   )
   if(NOT cmp0178 STREQUAL "NEW")
-    # Preserve old behavior where empty list items are silently discarded
+    # Preserve old behavior where empty list items are silently discarded.
+    # Before CMP0178 was added, we used the old cmake_parse_arguments() form
+    # rather than cmake_parse_arguments(PARSE_ARGV). The latter escapes
+    # embedded semicolons if a value is quoted and there are semicolons
+    # within the quoted value. We can't just unescape them to get the old
+    # value, we have to reparse the arguments with the old form.
+    cmake_parse_arguments(old_arg
+      "${options}" "${oneValueArgs}" "${multiValueArgs}"
+      ${ARGN}
+    )
+    set(new_arg_EXTRA_ARGS "${arg_EXTRA_ARGS}")
+    set(arg_EXTRA_ARGS "${old_arg_EXTRA_ARGS}")
+
     set(test_executor_orig "${test_executor}")
     set(test_executor ${test_executor})
-    set(arg_EXTRA_ARGS_orig "${arg_EXTRA_ARGS}")
-    set(arg_EXTRA_ARGS ${arg_EXTRA_ARGS})
     if(NOT cmp0178 STREQUAL "OLD")
       if(NOT "${test_executor}" STREQUAL "${test_executor_orig}")
         cmake_policy(GET_WARNING CMP0178 cmp0178_warning)
@@ -646,7 +669,9 @@ function(gtest_discover_tests target)
           "${cmp0178_warning}"
         )
       endif()
-      if(NOT "${arg_EXTRA_ARGS}" STREQUAL "${arg_EXTRA_ARGS_orig}")
+      # Unescape semicolons from the PARSE_ARGV form's value before comparing
+      string(REPLACE [[\;]] ";" new_arg_EXTRA_ARGS "${new_arg_EXTRA_ARGS}")
+      if(NOT "${old_arg_EXTRA_ARGS}" STREQUAL "${new_arg_EXTRA_ARGS}")
         cmake_policy(GET_WARNING CMP0178 cmp0178_warning)
         message(AUTHOR_WARNING
           "The EXTRA_ARGS value contains one or more empty values. "
@@ -731,23 +756,17 @@ function(gtest_discover_tests target)
     )
 
     if(GENERATOR_IS_MULTI_CONFIG)
-      foreach(_config ${CMAKE_CONFIGURATION_TYPES})
-        file(GENERATE
-          OUTPUT "${ctest_file_base}_include-${_config}.cmake"
-          CONTENT "${ctest_include_content}"
-          CONDITION $<CONFIG:${_config}>
-        )
-      endforeach()
+      file(GENERATE
+        OUTPUT "${ctest_file_base}_include-$<CONFIG>.cmake"
+        CONTENT "${ctest_include_content}"
+      )
       file(WRITE "${ctest_include_file}"
         "include(\"${ctest_file_base}_include-\${CTEST_CONFIGURATION_TYPE}.cmake\")"
       )
     else()
       file(GENERATE
-        OUTPUT "${ctest_file_base}_include.cmake"
+        OUTPUT "${ctest_include_file}"
         CONTENT "${ctest_include_content}"
-      )
-      file(WRITE "${ctest_include_file}"
-        "include(\"${ctest_file_base}_include.cmake\")"
       )
     endif()
 

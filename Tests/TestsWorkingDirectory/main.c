@@ -15,9 +15,9 @@
 #    define _getcwd getcwd
 #  endif
 
-static const char* Getcwd(char* buf, unsigned int len)
+static char const* Getcwd(char* buf, unsigned int len)
 {
-  const char* ret = _getcwd(buf, len);
+  char const* ret = _getcwd(buf, len);
   char* p = NULL;
   if (!ret) {
     fprintf(stderr, "No current working directory.\n");
@@ -25,7 +25,7 @@ static const char* Getcwd(char* buf, unsigned int len)
   }
   // make sure the drive letter is capital
   if (strlen(buf) > 1 && buf[1] == ':') {
-    buf[0] = toupper(buf[0]);
+    buf[0] = toupper((unsigned char)buf[0]);
   }
   for (p = buf; *p; ++p) {
     if (*p == '\\') {
@@ -41,9 +41,9 @@ static const char* Getcwd(char* buf, unsigned int len)
 
 #  include <sys/types.h>
 
-static const char* Getcwd(char* buf, unsigned int len)
+static char const* Getcwd(char* buf, unsigned int len)
 {
-  const char* ret = getcwd(buf, len);
+  char const* ret = getcwd(buf, len);
   if (!ret) {
     fprintf(stderr, "No current working directory\n");
     abort();
@@ -56,7 +56,7 @@ static const char* Getcwd(char* buf, unsigned int len)
 int main(int argc, char* argv[])
 {
   char buf[2048];
-  const char* cwd = Getcwd(buf, sizeof(buf));
+  char const* cwd = Getcwd(buf, sizeof(buf));
 
   return strcmp(cwd, argv[1]);
 }

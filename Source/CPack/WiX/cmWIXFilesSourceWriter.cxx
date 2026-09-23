@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #if defined(__CYGWIN__)
 // For S_IWRITE symbol
 #  define _DEFAULT_SOURCE
@@ -15,12 +15,30 @@
 #include "cmUuid.h"
 #include "cmWIXAccessControlList.h"
 
-cmWIXFilesSourceWriter::cmWIXFilesSourceWriter(unsigned long wixVersion,
-                                               cmCPackLog* logger,
-                                               std::string const& filename,
-                                               GuidType componentGuidType)
+#ifdef _WIN32
+#  include "cmsys/Encoding.hxx"
+#endif
+
+cmWIXFilesSourceWriter::cmWIXFilesSourceWriter(
+  unsigned long wixVersion, cmCPackLog* logger, std::string const& filename,
+  GuidType componentGuidType, cmWIXInstallScope installScope,
+  std::string componentKeysRegistryPath)
   : cmWIXSourceWriter(wixVersion, logger, filename, componentGuidType)
+  , ComponentKeysRegistryPath(std::move(componentKeysRegistryPath))
 {
+  switch (installScope) {
+    case cmWIXInstallScope::PER_USER:
+      this->PerUserInstall = true;
+      break;
+    case cmWIXInstallScope::PER_MACHINE:
+    case cmWIXInstallScope::NONE:
+      this->PerUserInstall = false;
+      break;
+    default:
+      cmCPackLogger(cmCPackLog::LOG_ERROR,
+                    "Unhandled install scope value, this is a CPack Bug.");
+      break;
+  }
 }
 
 void cmWIXFilesSourceWriter::EmitShortcut(std::string const& id,
@@ -118,12 +136,16 @@ std::string cmWIXFilesSourceWriter::EmitComponentCreateFolder(
 std::string cmWIXFilesSourceWriter::EmitComponentFile(
   std::string const& directoryId, std::string const& id,
   std::string const& filePath, cmWIXPatch& patch,
-  cmInstalledFile const* installedFile)
+  cmInstalledFile const* installedFile, int diskId)
 {
   std::string componentId = std::string("CM_C") + id;
   std::string fileId = std::string("CM_F") + id;
 
-  std::string guid = CreateGuidFromComponentId(componentId);
+  // Wix doesn't support automatic GUIDs for components which have both
+  // registry entries and files.
+  std::string guid = this->PerUserInstall
+    ? CreateCmakeGeneratedGuidFromComponentId(componentId)
+    : CreateGuidFromComponentId(componentId);
 
   BeginElement("DirectoryRef");
   AddAttribute("Id", directoryId);
@@ -131,6 +153,10 @@ std::string cmWIXFilesSourceWriter::EmitComponentFile(
   BeginElement("Component");
   AddAttribute("Id", componentId);
   AddAttribute("Guid", guid);
+
+  if (diskId) {
+    AddAttribute("DiskId", std::to_string(diskId));
+  }
 
   if (installedFile) {
     if (installedFile->GetPropertyAsBool("CPACK_NEVER_OVERWRITE")) {
@@ -142,10 +168,39 @@ std::string cmWIXFilesSourceWriter::EmitComponentFile(
   }
 
   patch.ApplyFragment(componentId, *this);
+
+  if (this->PerUserInstall) {
+    // For perUser installs, MSI requires using a registry entry as the key
+    // path for components.
+    BeginElement("RegistryValue");
+
+    AddAttribute("Root", "HKCU");
+    AddAttribute("Key", this->ComponentKeysRegistryPath);
+    AddAttribute("Name", fileId);
+    AddAttribute("Type", "string");
+    AddAttribute("Value", "1");
+    AddAttribute("KeyPath", "yes");
+
+    EndElement("RegistryValue");
+  }
+
   BeginElement("File");
   AddAttribute("Id", fileId);
-  AddAttribute("Source", CMakeToWixPath(filePath));
-  AddAttribute("KeyPath", "yes");
+
+  std::string sourcePath = CMakeToWixPath(filePath);
+#ifdef _WIN32
+  // WiX cannot handle long paths natively, but since v4,
+  // it supports long paths via UNC prefixes.
+  if (this->WixVersion >= 4) {
+    sourcePath = cmsys::Encoding::ToNarrow(
+      cmsys::Encoding::ToWindowsExtendedPath(sourcePath));
+  }
+#endif
+  AddAttribute("Source", sourcePath);
+
+  if (!this->PerUserInstall) {
+    AddAttribute("KeyPath", "yes");
+  }
 
   mode_t fileMode = 0;
   cmSystemTools::GetPermissions(filePath.c_str(), fileMode);

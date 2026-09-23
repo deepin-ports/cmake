@@ -9,17 +9,18 @@ Synopsis
 .. parsed-literal::
 
   `Query host system specific information`_
-    cmake_host_system_information(RESULT <variable> QUERY <key> ...)
+    cmake_host_system_information(RESULT <variable> `QUERY`_ <key> ...)
 
-  `Query Windows registry`_
-    cmake_host_system_information(RESULT <variable> QUERY WINDOWS_REGISTRY <key> ...)
+  `Query the Windows registry`_
+    cmake_host_system_information(RESULT <variable> `QUERY WINDOWS_REGISTRY`_ <key> ...)
 
 Query host system specific information
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: cmake
-
+.. signature::
   cmake_host_system_information(RESULT <variable> QUERY <key> ...)
+  :target:
+    QUERY
 
 Queries system information of the host system on which cmake runs.
 One or more ``<key>`` can be provided to select the information to be
@@ -111,6 +112,16 @@ queried.  The list of queried values is stored in ``<variable>``.
 
   One if processor has serial number
 
+``HAS_APIC``
+  .. versionadded:: 4.3
+
+  One if processor supports APIC
+
+``HAS_L1_CACHE``
+  .. versionadded:: 4.3
+
+  One if processor has L1 cache
+
 ``PROCESSOR_SERIAL_NUMBER``
   .. versionadded:: 3.10
 
@@ -126,10 +137,29 @@ queried.  The list of queried values is stored in ``<variable>``.
 
   Human readable full processor description
 
+``LOCALE_CHARSET``
+  .. versionadded:: 4.3
+
+  The locale's character set, if known, otherwise empty.
+
+  This is the :ref:`encoding <CMake Language Encoding>` expected
+  in :manual:`cmake-language(7)` files and scripts:
+
+  * On Windows, this is always ``UTF-8``.
+  * On UNIX and macOS, this is based on the current locale.
+
 ``OS_NAME``
   .. versionadded:: 3.10
 
-  See :variable:`CMAKE_HOST_SYSTEM_NAME`
+  The host operating system name:
+
+  * On UNIX platforms, this is ``uname -s``.
+
+  * On Apple platforms, this is ``sw_vers -productName``.
+
+  * On Windows, this is ``Windows``.
+
+  See also :variable:`CMAKE_HOST_SYSTEM_NAME`.
 
 ``OS_RELEASE``
   .. versionadded:: 3.10
@@ -152,6 +182,46 @@ queried.  The list of queried values is stored in ``<variable>``.
   Available only on Windows hosts.  In a MSYS or MinGW development
   environment that sets the ``MSYSTEM`` environment variable, this
   is its installation prefix.  Otherwise, this is the empty string.
+
+``FAMILY_ID``
+  .. versionadded:: 4.3
+
+  The processor family name
+
+``MODEL_ID``
+  .. versionadded:: 4.3
+
+  The processor model ID
+
+``MODEL_NAME``
+  .. versionadded:: 4.3
+
+  The processor model name
+
+``PROCESSOR_APIC_ID``
+  .. versionadded:: 4.3
+
+  The processor APIC ID
+
+``PROCESSOR_CACHE_SIZE``
+  .. versionadded:: 4.3
+
+  The processor L1 cache size
+
+``PROCESSOR_CLOCK_FREQUENCY``
+  .. versionadded:: 4.3
+
+  The processor clock frequency
+
+``VENDOR_ID``
+  .. versionadded:: 4.3
+
+  The processor vendor ID
+
+``VENDOR_STRING``
+  .. versionadded:: 4.3
+
+  The processor vendor string
 
 ``DISTRIB_INFO``
   .. versionadded:: 3.22
@@ -206,7 +276,7 @@ Fallback Interface Variables
 .. variable:: CMAKE_GET_OS_RELEASE_FALLBACK_SCRIPTS
 
   In addition to the scripts shipped with CMake, a user may append full
-  paths to his script(s) to the this list.  The script filename has the
+  paths of their script(s) to this list.  The script filename has the
   following format: ``NNN-<name>.cmake``, where ``NNN`` is three digits
   used to apply collected scripts in a specific order.
 
@@ -226,6 +296,8 @@ Example:
 
 .. code-block:: cmake
 
+  # 000-FallbackScript.cmake
+  #
   # Try to detect some old distribution
   # See also
   # - http://linuxmafia.com/faq/Admin/release-files.html
@@ -260,6 +332,18 @@ Example:
   endif()
   unset(CMAKE_GET_OS_RELEASE_FALLBACK_CONTENT)
 
+Then this script can be applied as a fallback to determine the missing host
+system information:
+
+.. code-block:: cmake
+
+  list(
+    APPEND
+    CMAKE_GET_OS_RELEASE_FALLBACK_SCRIPTS
+    ${CMAKE_CURRENT_SOURCE_DIR}/000-FallbackScript.cmake
+  )
+
+  cmake_host_system_information(RESULT info QUERY DISTRIB_INFO)
 
 .. rubric:: Footnotes
 
@@ -268,20 +352,19 @@ Example:
 .. _man 5 os-release: https://www.freedesktop.org/software/systemd/man/latest/os-release.html
 .. _various distribution-specific files: http://linuxmafia.com/faq/Admin/release-files.html
 
-.. _Query Windows registry:
-
-Query Windows registry
-^^^^^^^^^^^^^^^^^^^^^^
+Query the Windows registry
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. versionadded:: 3.24
 
-::
-
+.. signature::
   cmake_host_system_information(RESULT <variable>
                                 QUERY WINDOWS_REGISTRY <key> [VALUE_NAMES|SUBKEYS|VALUE <name>]
                                 [VIEW (64|32|64_32|32_64|HOST|TARGET|BOTH)]
                                 [SEPARATOR <separator>]
                                 [ERROR_VARIABLE <result>])
+  :target:
+    QUERY WINDOWS_REGISTRY
 
 Performs query operations on local computer registry subkey. Returns a list of
 subkeys or value names that are located under the specified subkey in the

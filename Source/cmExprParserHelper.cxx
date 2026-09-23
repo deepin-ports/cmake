@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmExprParserHelper.h"
 
 #include <iostream>
@@ -21,7 +21,7 @@ cmExprParserHelper::cmExprParserHelper()
 
 cmExprParserHelper::~cmExprParserHelper() = default;
 
-int cmExprParserHelper::ParseString(const char* str, int verb)
+int cmExprParserHelper::ParseString(char const* str, int verb)
 {
   if (!str) {
     return 0;
@@ -52,12 +52,13 @@ int cmExprParserHelper::ParseString(const char* str, int verb)
                              this->InputBuffer, "\": ", fail.what(), '.');
     this->SetError(std::move(e));
   } catch (std::out_of_range const&) {
-    std::string e = "cannot evaluate the expression: \"" + this->InputBuffer +
-      "\": a numeric value is out of range.";
+    std::string e =
+      cmStrCat("cannot evaluate the expression: \"", this->InputBuffer,
+               "\": a numeric value is out of range.");
     this->SetError(std::move(e));
   } catch (...) {
     std::string e =
-      "cannot parse the expression: \"" + this->InputBuffer + "\".";
+      cmStrCat("cannot parse the expression: \"", this->InputBuffer, "\".");
     this->SetError(std::move(e));
   }
   cmExpr_yylex_destroy(yyscanner);
@@ -91,7 +92,7 @@ int cmExprParserHelper::LexInput(char* buf, int maxlen)
   return (0);
 }
 
-void cmExprParserHelper::Error(const char* str)
+void cmExprParserHelper::Error(char const* str)
 {
   unsigned long pos = static_cast<unsigned long>(this->InputBufferPos);
   std::ostringstream ostr;

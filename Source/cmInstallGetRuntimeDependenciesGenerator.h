@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #pragma once
 
 #include <iosfwd>
@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "cmInstallGenerator.h"
+#include "cmPolicies.h"
 
 class cmListFileBacktrace;
 class cmLocalGenerator;
@@ -24,17 +25,17 @@ public:
     std::vector<std::string> postExcludeRegexes,
     std::vector<std::string> postIncludeFiles,
     std::vector<std::string> postExcludeFiles, std::string libraryComponent,
-    std::string frameworkComponent, bool noInstallRPath, const char* depsVar,
-    const char* rpathPrefix, std::vector<std::string> const& configurations,
-    MessageLevel message, bool exclude_from_all,
-    cmListFileBacktrace backtrace);
+    std::string frameworkComponent, bool noInstallRPath, char const* depsVar,
+    char const* rpathPrefix, std::vector<std::string> const& configurations,
+    MessageLevel message, bool exclude_from_all, cmListFileBacktrace backtrace,
+    cmPolicies::PolicyStatus policyStatusCMP0207);
 
   bool Compute(cmLocalGenerator* lg) override;
 
 protected:
   void GenerateScript(std::ostream& os) override;
 
-  void GenerateScriptForConfig(std::ostream& os, const std::string& config,
+  void GenerateScriptForConfig(std::ostream& os, std::string const& config,
                                Indent indent) override;
 
 private:
@@ -48,8 +49,9 @@ private:
   std::vector<std::string> PostExcludeFiles;
   std::string LibraryComponent;
   std::string FrameworkComponent;
+  cmPolicies::PolicyStatus PolicyStatusCMP0207;
   bool NoInstallRPath;
-  const char* DepsVar;
-  const char* RPathPrefix;
+  char const* DepsVar;
+  char const* RPathPrefix;
   cmLocalGenerator* LocalGenerator = nullptr;
 };

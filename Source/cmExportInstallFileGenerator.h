@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #pragma once
 
 #include "cmConfigure.h" // IWYU pragma: keep
@@ -17,7 +17,6 @@
 #include "cmInstallExportGenerator.h"
 #include "cmStateTypes.h"
 
-class cmExportSet;
 class cmGeneratorTarget;
 class cmInstallTargetGenerator;
 class cmTargetExport;
@@ -75,7 +74,7 @@ protected:
 
   std::string GetInstallPrefix() const
   {
-    cm::string_view const& prefixWithSlash = this->GetImportPrefixWithSlash();
+    cm::string_view const prefixWithSlash = this->GetImportPrefixWithSlash();
     return std::string(prefixWithSlash.data(), prefixWithSlash.length() - 1);
   }
   virtual char GetConfigFileNameSeparator() const = 0;
@@ -86,16 +85,17 @@ protected:
 
   void ReplaceInstallPrefix(std::string& input) const override;
 
-  void ComplainAboutMissingTarget(
-    cmGeneratorTarget const* depender, cmGeneratorTarget const* dependee,
-    std::vector<std::string> const& exportFiles) const;
+  void ComplainAboutMissingTarget(cmGeneratorTarget const* depender,
+                                  cmGeneratorTarget const* dependee,
+                                  ExportInfo const& exportInfo) const;
 
   void ComplainAboutDuplicateTarget(
     std::string const& targetName) const override;
 
   ExportInfo FindExportInfo(cmGeneratorTarget const* target) const override;
 
-  void ReportError(std::string const& errorMessage) const override;
+  void IssueMessage(MessageType type,
+                    std::string const& message) const override;
 
   /** Generate a per-configuration file for the targets.  */
   virtual bool GenerateImportFileConfig(std::string const& config);
@@ -135,6 +135,10 @@ protected:
                                 ImportPropertyMap& properties,
                                 std::set<std::string>& importedLocations);
 
+  virtual bool CheckInterfaceDirs(std::string const& prepro,
+                                  cmGeneratorTarget const* target,
+                                  std::string const& prop) const;
+
   cmInstallExportGenerator* IEGen;
 
   // The import file generated for each configuration.
@@ -145,9 +149,6 @@ protected:
   std::map<std::string, std::vector<std::string>> ConfigCxxModuleTargetFiles;
 
 private:
-  bool CheckInterfaceDirs(std::string const& prepro,
-                          cmGeneratorTarget const* target,
-                          std::string const& prop) const;
   void PopulateCompatibleInterfaceProperties(cmGeneratorTarget const* target,
                                              ImportPropertyMap& properties);
   void PopulateCustomTransitiveInterfaceProperties(
@@ -159,6 +160,10 @@ private:
     cmGeneratorExpression::PreprocessContext preprocessRule,
     ImportPropertyMap& properties, cmTargetExport const& te,
     std::string& includesDestinationDirs);
+  void PopulateSystemIncludeDirectoriesInterface(
+    cmGeneratorTarget const* target,
+    cmGeneratorExpression::PreprocessContext preprocessRule,
+    ImportPropertyMap& properties);
   void PopulateSourcesInterface(
     cmGeneratorTarget const* target,
     cmGeneratorExpression::PreprocessContext preprocessRule,

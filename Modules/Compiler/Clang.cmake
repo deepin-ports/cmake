@@ -1,5 +1,5 @@
 # Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-# file Copyright.txt or https://cmake.org/licensing for details.
+# file LICENSE.rst or https://cmake.org/licensing for details.
 
 
 # This module is shared by multiple languages; use include blocker.
@@ -113,8 +113,14 @@ else()
     if(CMAKE_${lang}_COMPILER_VERSION VERSION_GREATER_EQUAL 11.0.0 AND NOT __is_apple_clang)
       set(CMAKE_${lang}_COMPILE_OPTIONS_INSTANTIATE_TEMPLATES_PCH -fpch-instantiate-templates)
     endif()
-    set(CMAKE_${lang}_COMPILE_OPTIONS_USE_PCH -Xclang -include-pch -Xclang <PCH_FILE> -Xclang -include -Xclang <PCH_HEADER>)
-    set(CMAKE_${lang}_COMPILE_OPTIONS_CREATE_PCH -Xclang -emit-pch -Xclang -include -Xclang <PCH_HEADER> -x ${__pch_header_${lang}})
+    if (CMAKE_GENERATOR MATCHES "FASTBuild")
+      # We can't use "-Xclang -emit-pch" since Fastbuild gets spammed with binary content of the .pch file while trying to scan dependencies.
+      set(CMAKE_${lang}_COMPILE_OPTIONS_USE_PCH -include-pch <PCH_FILE> -Xclang -include -Xclang <PCH_HEADER>)
+      set(CMAKE_${lang}_COMPILE_OPTIONS_CREATE_PCH -Xclang -include -Xclang <PCH_HEADER> -x ${__pch_header_${lang}})
+    else()
+      set(CMAKE_${lang}_COMPILE_OPTIONS_USE_PCH -Xclang -include-pch -Xclang <PCH_FILE> -Xclang -include -Xclang <PCH_HEADER>)
+      set(CMAKE_${lang}_COMPILE_OPTIONS_CREATE_PCH -Xclang -emit-pch -Xclang -include -Xclang <PCH_HEADER> -x ${__pch_header_${lang}})
+    endif()
 
     # '-fcolor-diagnostics' introduced since Clang 2.6
     if(CMAKE_${lang}_COMPILER_VERSION VERSION_GREATER_EQUAL 2.6)
@@ -262,7 +268,9 @@ macro(__compiler_clang_cxx_standards lang)
       # files that also have C sources.
       set(CMAKE_${lang}23_STANDARD_COMPILE_OPTION "-clang:-std=c++23")
       set(CMAKE_${lang}23_EXTENSION_COMPILE_OPTION "-clang:-std=c++23")
-      set(CMAKE_${lang}_STANDARD_LATEST 23)
+      set(CMAKE_${lang}26_STANDARD_COMPILE_OPTION "-std:c++latest")
+      set(CMAKE_${lang}26_EXTENSION_COMPILE_OPTION "-std:c++latest")
+      set(CMAKE_${lang}_STANDARD_LATEST 26)
     elseif(CMAKE_${lang}_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0)
       set(CMAKE_${lang}23_STANDARD_COMPILE_OPTION "-std:c++latest")
       set(CMAKE_${lang}23_EXTENSION_COMPILE_OPTION "-std:c++latest")

@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #pragma once
 
 #include "cmConfigure.h" // IWYU pragma: keep
@@ -11,11 +11,9 @@
 
 #include "cmExportCMakeConfigGenerator.h"
 
-class cmFileSet;
 class cmGeneratorTarget;
 class cmGlobalGenerator;
 class cmMakefile;
-class cmTargetExport;
 
 class cmExportTryCompileFileGenerator : public cmExportCMakeConfigGenerator
 {
@@ -31,8 +29,9 @@ public:
 protected:
   // Implement virtual methods from the superclass.
   void ComplainAboutDuplicateTarget(
-    std::string const& /*targetName*/) const override{};
-  void ReportError(std::string const& errorMessage) const override;
+    std::string const& /*targetName*/) const override {};
+  void IssueMessage(MessageType type,
+                    std::string const& message) const override;
 
   bool GenerateMainFile(std::ostream& os) override;
 
@@ -47,7 +46,7 @@ protected:
 
   ExportInfo FindExportInfo(cmGeneratorTarget const* /*target*/) const override
   {
-    return { {}, {} };
+    return { {}, {}, {} };
   }
 
   void PopulateProperties(cmGeneratorTarget const* target,

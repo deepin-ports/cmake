@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <cm/iterator>
+#include <cm/optional>
 #include <cmext/string_view>
 
 #include "cmAlgorithms.h"
@@ -118,7 +119,7 @@ bool cmVisualStudioGeneratorOptions::UsingDebugInfo() const
 cm::optional<bool> cmVisualStudioGeneratorOptions::UsingDebugRuntime() const
 {
   cm::optional<bool> result;
-  if (const char* rtl = this->GetFlag("RuntimeLibrary")) {
+  if (char const* rtl = this->GetFlag("RuntimeLibrary")) {
     result = strstr(rtl, "Debug") != nullptr;
   }
   return result;
@@ -134,26 +135,23 @@ bool cmVisualStudioGeneratorOptions::IsManaged() const
   return this->FlagMap.find("CompileAsManaged") != this->FlagMap.end();
 }
 
-bool cmVisualStudioGeneratorOptions::UsingUnicode() const
+cm::optional<cmGeneratorTarget::MsvcCharSet>
+cmVisualStudioGeneratorOptions::GetCharSet() const
 {
-  // Look for a _UNICODE definition.
-  return std::any_of(
-    this->Defines.begin(), this->Defines.end(), [](std::string const& di) {
-      return di == "_UNICODE"_s || cmHasLiteralPrefix(di, "_UNICODE=");
-    });
-}
-bool cmVisualStudioGeneratorOptions::UsingSBCS() const
-{
-  // Look for a _SBCS definition.
-  return std::any_of(
-    this->Defines.begin(), this->Defines.end(), [](std::string const& di) {
-      return di == "_SBCS"_s || cmHasLiteralPrefix(di, "_SBCS=");
-    });
+  // Look for a project- or user-specified character set definition.
+  for (std::string const& define : this->Defines) {
+    cmGeneratorTarget::MsvcCharSet charSet =
+      cmGeneratorTarget::GetMsvcCharSet(define);
+    if (charSet != cmGeneratorTarget::MsvcCharSet::None) {
+      return charSet;
+    }
+  }
+  return cm::nullopt;
 }
 
 void cmVisualStudioGeneratorOptions::FixCudaCodeGeneration()
 {
-  // Create an empty CodeGeneration field, and pass the the actual
+  // Create an empty CodeGeneration field, and pass the actual
   // compile flags via additional options so that we have consistent
   // behavior and avoid issues with MSBuild extensions injecting
   // virtual code when we request real only.
@@ -168,7 +166,7 @@ void cmVisualStudioGeneratorOptions::FixManifestUACFlags()
     return;
   }
 
-  const std::string uacFlag = GetFlag(ENABLE_UAC);
+  std::string const uacFlag = GetFlag(ENABLE_UAC);
   std::vector<std::string> subOptions;
   cmsys::SystemTools::Split(uacFlag, subOptions, ' ');
   if (subOptions.empty()) {
@@ -228,7 +226,7 @@ void cmVisualStudioGeneratorOptions::FixManifestUACFlags()
   AddFlag(ENABLE_UAC, "true");
 }
 
-void cmVisualStudioGeneratorOptions::Parse(const std::string& flags)
+void cmVisualStudioGeneratorOptions::Parse(std::string const& flags)
 {
   // Parse the input string as a windows command line since the string
   // is intended for writing directly into the build files.
@@ -342,18 +340,18 @@ cmIDEOptions::FlagValue cmVisualStudioGeneratorOptions::TakeFlag(
 }
 
 void cmVisualStudioGeneratorOptions::SetConfiguration(
-  const std::string& config)
+  std::string const& config)
 {
   this->Configuration = config;
 }
 
-const std::string& cmVisualStudioGeneratorOptions::GetConfiguration() const
+std::string const& cmVisualStudioGeneratorOptions::GetConfiguration() const
 {
   return this->Configuration;
 }
 
 void cmVisualStudioGeneratorOptions::OutputPreprocessorDefinitions(
-  std::ostream& fout, int indent, const std::string& lang)
+  std::ostream& fout, int indent, std::string const& lang)
 {
   if (this->Defines.empty()) {
     return;
@@ -389,7 +387,7 @@ void cmVisualStudioGeneratorOptions::OutputPreprocessorDefinitions(
 }
 
 void cmVisualStudioGeneratorOptions::OutputAdditionalIncludeDirectories(
-  std::ostream& fout, int indent, const std::string& lang)
+  std::ostream& fout, int indent, std::string const& lang)
 {
   if (this->Includes.empty()) {
     return;
@@ -403,7 +401,7 @@ void cmVisualStudioGeneratorOptions::OutputAdditionalIncludeDirectories(
   }
 
   std::ostringstream oss;
-  const char* sep = "";
+  char const* sep = "";
   for (std::string include : this->Includes) {
     // first convert all of the slashes
     std::string::size_type pos = 0;
@@ -441,7 +439,7 @@ void cmVisualStudioGeneratorOptions::OutputFlagMap(std::ostream& fout,
 {
   for (auto const& m : this->FlagMap) {
     std::ostringstream oss;
-    const char* sep = "";
+    char const* sep = "";
     for (std::string i : m.second) {
       if (!this->LocalGenerator->IsVFProj()) {
         cmVS10EscapeForMSBuild(i);

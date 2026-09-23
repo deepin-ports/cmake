@@ -1,10 +1,8 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 /* clang-format off */
 #include "cmGeneratorTarget.h"
 /* clang-format on */
-
-#include "cmConfigure.h"
 
 #include <algorithm>
 #include <iterator>
@@ -20,8 +18,8 @@
 #include <cmext/string_view>
 
 #include "cmEvaluatedTargetProperty.h"
+#include "cmGenExContext.h"
 #include "cmGeneratorExpressionDAGChecker.h"
-#include "cmGlobalGenerator.h"
 #include "cmList.h"
 #include "cmListFileCache.h"
 #include "cmLocalGenerator.h"
@@ -40,15 +38,21 @@ enum class OptionsParse
   Shell
 };
 
+struct MsvcCharSetInfo
+{
+  cmGeneratorTarget::MsvcCharSet CharSet;
+  bool IsNeedToAddDefine;
+};
+
 namespace {
-const auto DL_BEGIN = "<DEVICE_LINK>"_s;
-const auto DL_END = "</DEVICE_LINK>"_s;
+auto const DL_BEGIN = "<DEVICE_LINK>"_s;
+auto const DL_END = "</DEVICE_LINK>"_s;
 
 void processOptions(cmGeneratorTarget const* tgt,
                     EvaluatedTargetPropertyEntries const& entries,
                     std::vector<BT<std::string>>& options,
                     std::unordered_set<std::string>& uniqueOptions,
-                    bool debugOptions, const char* logName, OptionsParse parse,
+                    bool debugOptions, char const* logName, OptionsParse parse,
                     bool processDeviceOptions = false)
 {
   bool splitOption = !processDeviceOptions;
@@ -78,15 +82,15 @@ void processOptions(cmGeneratorTarget const* tgt,
           options.emplace_back(opt, entry.Backtrace);
         }
         if (debugOptions) {
-          usedOptions += " * " + opt + "\n";
+          usedOptions += cmStrCat(" * ", opt, '\n');
         }
       }
     }
     if (!usedOptions.empty()) {
       tgt->GetLocalGenerator()->GetCMakeInstance()->IssueMessage(
         MessageType::LOG,
-        std::string("Used ") + logName + std::string(" for target ") +
-          tgt->GetName() + ":\n" + usedOptions,
+        cmStrCat("Used ", logName, " for target ", tgt->GetName(), ":\n",
+                 usedOptions),
         entry.Backtrace);
     }
   }
@@ -95,12 +99,12 @@ void processOptions(cmGeneratorTarget const* tgt,
 enum class NestedLinkerFlags
 {
   PreserveAsSpelled,
-  Normalize,
+  Normalize
 };
 
 std::vector<BT<std::string>> wrapOptions(
-  std::vector<std::string>& options, const cmListFileBacktrace& bt,
-  const std::vector<std::string>& wrapperFlag, const std::string& wrapperSep,
+  std::vector<std::string>& options, cmListFileBacktrace const& bt,
+  std::vector<std::string> const& wrapperFlag, std::string const& wrapperSep,
   bool concatFlagAndArgs, NestedLinkerFlags nestedLinkerFlags)
 {
   std::vector<BT<std::string>> result;
@@ -207,11 +211,50 @@ std::vector<BT<std::string>> wrapOptions(
   }
   return result;
 }
+
+cm::string_view const UNICODE_DEFINITION = "_UNICODE"_s;
+cm::string_view const MBCS_DEFINITION = "_MBCS"_s;
+cm::string_view const SBCS_DEFINITION = "_SBCS"_s;
+
+constexpr char UNICODE_DEFINITION_PREFIX[] = "_UNICODE=";
+constexpr char MBCS_DEFINITION_PREFIX[] = "_MBCS=";
+constexpr char SBCS_DEFINITION_PREFIX[] = "_SBCS=";
+
+MsvcCharSetInfo GetMsvcCharSetInfo(
+  cmGeneratorTarget const& tgt, std::string const& lang,
+  EvaluatedTargetPropertyEntries const& entries)
+{
+  using MsvcCharSet = cmGeneratorTarget::MsvcCharSet;
+
+  if (tgt.Makefile->GetSafeDefinition(
+        cmStrCat("CMAKE_", lang, "_COMPILER_ID")) != "MSVC"_s &&
+      tgt.Makefile->GetSafeDefinition(
+        cmStrCat("CMAKE_", lang, "_SIMULATE_ID")) != "MSVC"_s) {
+
+    // Only MSVC ABI uses this feature
+    return { MsvcCharSet::None, false };
+  }
+
+  for (EvaluatedTargetPropertyEntry const& entry : entries.Entries) {
+    for (std::string const& value : entry.Values) {
+      MsvcCharSet charSet = cmGeneratorTarget::GetMsvcCharSet(value);
+      if (charSet != MsvcCharSet::None) {
+        return { charSet, false };
+      }
+    }
+  }
+
+  // Default to multi-byte, similar to the Visual Studio generator
+  // Define the default charset for Visual Studio too:
+  // it should filter it out if need
+  return { MsvcCharSet::MultiByte, true };
+}
+
 }
 
 void cmGeneratorTarget::GetCompileOptions(std::vector<std::string>& result,
-                                          const std::string& config,
-                                          const std::string& language) const
+                                          std::string const& config,
+                                          std::string const& language) const
 {
   std::vector<BT<std::string>> tmp = this->GetCompileOptions(config, language);
   result.reserve(tmp.size());
@@ -233,23 +276,24 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetCompileOptions(
   std::vector<BT<std::string>> result;
   std::unordered_set<std::string> uniqueOptions;
 
-  cmGeneratorExpressionDAGChecker dagChecker(
-    this, "COMPILE_OPTIONS", nullptr, nullptr, this->LocalGenerator, config);
+  cm::GenEx::Context context(this->LocalGenerator, config, language);
+
+  cmGeneratorExpressionDAGChecker dagChecker{
+    this, "COMPILE_OPTIONS", nullptr, nullptr, context,
+  };
 
   cmList debugProperties{ this->Makefile->GetDefinition(
     "CMAKE_DEBUG_TARGET_PROPERTIES") };
   bool debugOptions = !this->DebugCompileOptionsDone &&
     cm::contains(debugProperties, "COMPILE_OPTIONS");
 
-  if (this->GlobalGenerator->GetConfigureDoneCMP0026()) {
-    this->DebugCompileOptionsDone = true;
-  }
+  this->DebugCompileOptionsDone = true;
 
   EvaluatedTargetPropertyEntries entries = EvaluateTargetPropertyEntries(
-    this, config, language, &dagChecker, this->CompileOptionsEntries);
+    this, context, &dagChecker, this->CompileOptionsEntries);
 
-  AddInterfaceEntries(this, config, "INTERFACE_COMPILE_OPTIONS", language,
-                      &dagChecker, entries, IncludeRuntimeInterface::Yes);
+  AddInterfaceEntries(this, "INTERFACE_COMPILE_OPTIONS", context, &dagChecker,
+                      entries, IncludeRuntimeInterface::Yes);
 
   processOptions(this, entries, result, uniqueOptions, debugOptions,
                  "compile options", OptionsParse::Shell);
@@ -259,7 +303,7 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetCompileOptions(
 }
 
 void cmGeneratorTarget::GetCompileFeatures(std::vector<std::string>& result,
-                                           const std::string& config) const
+                                           std::string const& config) const
 {
   std::vector<BT<std::string>> tmp = this->GetCompileFeatures(config);
   result.reserve(tmp.size());
@@ -274,24 +318,25 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetCompileFeatures(
   std::vector<BT<std::string>> result;
   std::unordered_set<std::string> uniqueFeatures;
 
-  cmGeneratorExpressionDAGChecker dagChecker(
-    this, "COMPILE_FEATURES", nullptr, nullptr, this->LocalGenerator, config);
+  cm::GenEx::Context context(this->LocalGenerator, config,
+                             /*language=*/std::string());
+
+  cmGeneratorExpressionDAGChecker dagChecker{
+    this, "COMPILE_FEATURES", nullptr, nullptr, context,
+  };
 
   cmList debugProperties{ this->Makefile->GetDefinition(
     "CMAKE_DEBUG_TARGET_PROPERTIES") };
   bool debugFeatures = !this->DebugCompileFeaturesDone &&
     cm::contains(debugProperties, "COMPILE_FEATURES");
 
-  if (this->GlobalGenerator->GetConfigureDoneCMP0026()) {
-    this->DebugCompileFeaturesDone = true;
-  }
+  this->DebugCompileFeaturesDone = true;
 
   EvaluatedTargetPropertyEntries entries = EvaluateTargetPropertyEntries(
-    this, config, std::string(), &dagChecker, this->CompileFeaturesEntries);
+    this, context, &dagChecker, this->CompileFeaturesEntries);
 
-  AddInterfaceEntries(this, config, "INTERFACE_COMPILE_FEATURES",
-                      std::string(), &dagChecker, entries,
-                      IncludeRuntimeInterface::Yes);
+  AddInterfaceEntries(this, "INTERFACE_COMPILE_FEATURES", context, &dagChecker,
+                      entries, IncludeRuntimeInterface::Yes);
 
   processOptions(this, entries, result, uniqueFeatures, debugFeatures,
                  "compile features", OptionsParse::None);
@@ -300,12 +345,12 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetCompileFeatures(
 }
 
 void cmGeneratorTarget::GetCompileDefinitions(
-  std::vector<std::string>& result, const std::string& config,
-  const std::string& language) const
+  std::vector<std::string>& result, std::string const& config,
+  std::string const& language) const
 {
   std::vector<BT<std::string>> tmp =
     this->GetCompileDefinitions(config, language);
-  result.reserve(tmp.size());
+  result.reserve(result.size() + tmp.size());
   for (BT<std::string>& v : tmp) {
     result.emplace_back(std::move(v.Value));
   }
@@ -324,49 +369,50 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetCompileDefinitions(
   std::vector<BT<std::string>> list;
   std::unordered_set<std::string> uniqueOptions;
 
-  cmGeneratorExpressionDAGChecker dagChecker(this, "COMPILE_DEFINITIONS",
-                                             nullptr, nullptr,
-                                             this->LocalGenerator, config);
+  cm::GenEx::Context context(this->LocalGenerator, config, language);
+
+  cmGeneratorExpressionDAGChecker dagChecker{
+    this, "COMPILE_DEFINITIONS", nullptr, nullptr, context,
+  };
 
   cmList debugProperties{ this->Makefile->GetDefinition(
     "CMAKE_DEBUG_TARGET_PROPERTIES") };
   bool debugDefines = !this->DebugCompileDefinitionsDone &&
     cm::contains(debugProperties, "COMPILE_DEFINITIONS");
 
-  if (this->GlobalGenerator->GetConfigureDoneCMP0026()) {
-    this->DebugCompileDefinitionsDone = true;
-  }
+  this->DebugCompileDefinitionsDone = true;
 
   EvaluatedTargetPropertyEntries entries = EvaluateTargetPropertyEntries(
-    this, config, language, &dagChecker, this->CompileDefinitionsEntries);
+    this, context, &dagChecker, this->CompileDefinitionsEntries);
 
-  AddInterfaceEntries(this, config, "INTERFACE_COMPILE_DEFINITIONS", language,
+  AddInterfaceEntries(this, "INTERFACE_COMPILE_DEFINITIONS", context,
                       &dagChecker, entries, IncludeRuntimeInterface::Yes);
 
-  if (!config.empty()) {
-    std::string configPropName =
-      "COMPILE_DEFINITIONS_" + cmSystemTools::UpperCase(config);
-    cmValue configProp = this->GetProperty(configPropName);
-    if (configProp) {
-      switch (this->Makefile->GetPolicyStatus(cmPolicies::CMP0043)) {
-        case cmPolicies::WARN: {
-          this->LocalGenerator->IssueMessage(
-            MessageType::AUTHOR_WARNING,
-            cmPolicies::GetPolicyWarning(cmPolicies::CMP0043));
-          CM_FALLTHROUGH;
-        }
-        case cmPolicies::OLD: {
-          std::unique_ptr<TargetPropertyEntry> entry =
-            TargetPropertyEntry::Create(
-              *this->LocalGenerator->GetCMakeInstance(), *configProp);
-          entries.Entries.emplace_back(EvaluateTargetPropertyEntry(
-            this, config, language, &dagChecker, *entry));
-        } break;
-        case cmPolicies::NEW:
-        case cmPolicies::REQUIRED_ALWAYS:
-        case cmPolicies::REQUIRED_IF_USED:
-          break;
-      }
+  // Add the character set definition
+  MsvcCharSetInfo charSetInfo = GetMsvcCharSetInfo(*this, language, entries);
+  if (charSetInfo.IsNeedToAddDefine &&
+      this->GetPolicyStatusCMP0204() == cmPolicies::NEW) {
+    cm::string_view define;
+    switch (charSetInfo.CharSet) {
+      case MsvcCharSet::None:
+        // Nothing to set
+        break;
+      case MsvcCharSet::Unicode:
+        define = UNICODE_DEFINITION;
+        break;
+      case MsvcCharSet::MultiByte:
+        define = MBCS_DEFINITION;
+        break;
+      case MsvcCharSet::SingleByte:
+        define = SBCS_DEFINITION;
+        break;
+    }
+    if (!define.empty()) {
+      std::unique_ptr<TargetPropertyEntry> property =
+        TargetPropertyEntry::Create(*this->LocalGenerator->GetCMakeInstance(),
+                                    std::string{ define });
+      entries.Entries.emplace_back(
+        EvaluateTargetPropertyEntry(this, context, &dagChecker, *property));
     }
   }
 
@@ -378,7 +424,7 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetCompileDefinitions(
 }
 
 std::vector<BT<std::string>> cmGeneratorTarget::GetPrecompileHeaders(
-  const std::string& config, const std::string& language) const
+  std::string const& config, std::string const& language) const
 {
   ConfigAndLanguage cacheKey(config, language);
   {
@@ -389,9 +435,11 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetPrecompileHeaders(
   }
   std::unordered_set<std::string> uniqueOptions;
 
-  cmGeneratorExpressionDAGChecker dagChecker(this, "PRECOMPILE_HEADERS",
-                                             nullptr, nullptr,
-                                             this->LocalGenerator, config);
+  cm::GenEx::Context context(this->LocalGenerator, config, language);
+
+  cmGeneratorExpressionDAGChecker dagChecker{
+    this, "PRECOMPILE_HEADERS", nullptr, nullptr, context,
+  };
 
   cmList debugProperties{ this->Makefile->GetDefinition(
     "CMAKE_DEBUG_TARGET_PROPERTIES") };
@@ -399,14 +447,12 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetPrecompileHeaders(
     std::find(debugProperties.begin(), debugProperties.end(),
               "PRECOMPILE_HEADERS") != debugProperties.end();
 
-  if (this->GlobalGenerator->GetConfigureDoneCMP0026()) {
-    this->DebugPrecompileHeadersDone = true;
-  }
+  this->DebugPrecompileHeadersDone = true;
 
   EvaluatedTargetPropertyEntries entries = EvaluateTargetPropertyEntries(
-    this, config, language, &dagChecker, this->PrecompileHeadersEntries);
+    this, context, &dagChecker, this->PrecompileHeadersEntries);
 
-  AddInterfaceEntries(this, config, "INTERFACE_PRECOMPILE_HEADERS", language,
+  AddInterfaceEntries(this, "INTERFACE_PRECOMPILE_HEADERS", context,
                       &dagChecker, entries, IncludeRuntimeInterface::Yes);
 
   std::vector<BT<std::string>> list;
@@ -418,8 +464,8 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetPrecompileHeaders(
 }
 
 void cmGeneratorTarget::GetLinkOptions(std::vector<std::string>& result,
-                                       const std::string& config,
-                                       const std::string& language) const
+                                       std::string const& config,
+                                       std::string const& language) const
 {
   if (this->IsDeviceLink() &&
       this->GetPolicyStatusCMP0105() != cmPolicies::NEW) {
@@ -448,23 +494,24 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetLinkOptions(
   std::vector<BT<std::string>> result;
   std::unordered_set<std::string> uniqueOptions;
 
-  cmGeneratorExpressionDAGChecker dagChecker(
-    this, "LINK_OPTIONS", nullptr, nullptr, this->LocalGenerator, config);
+  cm::GenEx::Context context(this->LocalGenerator, config, language);
+
+  cmGeneratorExpressionDAGChecker dagChecker{
+    this, "LINK_OPTIONS", nullptr, nullptr, context,
+  };
 
   cmList debugProperties{ this->Makefile->GetDefinition(
     "CMAKE_DEBUG_TARGET_PROPERTIES") };
   bool debugOptions = !this->DebugLinkOptionsDone &&
     cm::contains(debugProperties, "LINK_OPTIONS");
 
-  if (this->GlobalGenerator->GetConfigureDoneCMP0026()) {
-    this->DebugLinkOptionsDone = true;
-  }
+  this->DebugLinkOptionsDone = true;
 
   EvaluatedTargetPropertyEntries entries = EvaluateTargetPropertyEntries(
-    this, config, language, &dagChecker, this->LinkOptionsEntries);
+    this, context, &dagChecker, this->LinkOptionsEntries);
 
-  AddInterfaceEntries(this, config, "INTERFACE_LINK_OPTIONS", language,
-                      &dagChecker, entries, IncludeRuntimeInterface::Yes,
+  AddInterfaceEntries(this, "INTERFACE_LINK_OPTIONS", context, &dagChecker,
+                      entries, IncludeRuntimeInterface::Yes,
                       this->GetPolicyStatusCMP0099() == cmPolicies::NEW
                         ? UseTo::Link
                         : UseTo::Compile);
@@ -474,11 +521,11 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetLinkOptions(
 
   if (this->IsDeviceLink()) {
     // wrap host link options
-    const std::string wrapper(this->Makefile->GetSafeDefinition(
-      "CMAKE_" + language + "_DEVICE_COMPILER_WRAPPER_FLAG"));
+    std::string const wrapper(this->Makefile->GetSafeDefinition(
+      cmStrCat("CMAKE_", language, "_DEVICE_COMPILER_WRAPPER_FLAG")));
     cmList wrapperFlag{ wrapper };
-    const std::string wrapperSep(this->Makefile->GetSafeDefinition(
-      "CMAKE_" + language + "_DEVICE_COMPILER_WRAPPER_FLAG_SEP"));
+    std::string const wrapperSep(this->Makefile->GetSafeDefinition(
+      cmStrCat("CMAKE_", language, "_DEVICE_COMPILER_WRAPPER_FLAG_SEP")));
     bool concatFlagAndArgs = true;
     if (!wrapperFlag.empty() && wrapperFlag.back() == " ") {
       concatFlagAndArgs = false;
@@ -527,32 +574,31 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetLinkOptions(
   return result;
 }
 
-std::vector<BT<std::string>>& cmGeneratorTarget::ResolveLinkerWrapper(
-  std::vector<BT<std::string>>& result, const std::string& language,
-  bool joinItems) const
+std::vector<BT<std::string>>& cmGeneratorTarget::ResolvePrefixWrapper(
+  std::vector<BT<std::string>>& result, cm::string_view prefix,
+  std::string const& language, bool joinItems) const
 {
-  // replace "LINKER:" prefixed elements by actual linker wrapper
-  const std::string wrapper(this->Makefile->GetSafeDefinition(
-    "CMAKE_" + language +
-    (this->IsDeviceLink() ? "_DEVICE_LINKER_WRAPPER_FLAG"
-                          : "_LINKER_WRAPPER_FLAG")));
+  // replace "LINKER:" or "ARCHIVER:" prefixed elements by actual linker or
+  // archiver wrapper
+  std::string const wrapper(this->Makefile->GetSafeDefinition(
+    cmStrCat("CMAKE_", language, (this->IsDeviceLink() ? "_DEVICE_" : "_"),
+             prefix, "_WRAPPER_FLAG")));
   cmList wrapperFlag{ wrapper };
-  const std::string wrapperSep(this->Makefile->GetSafeDefinition(
-    "CMAKE_" + language +
-    (this->IsDeviceLink() ? "_DEVICE_LINKER_WRAPPER_FLAG_SEP"
-                          : "_LINKER_WRAPPER_FLAG_SEP")));
+  std::string const wrapperSep(this->Makefile->GetSafeDefinition(
+    cmStrCat("CMAKE_", language, (this->IsDeviceLink() ? "_DEVICE_" : "_"),
+             prefix, "_WRAPPER_FLAG_SEP")));
   bool concatFlagAndArgs = true;
   if (!wrapperFlag.empty() && wrapperFlag.back() == " ") {
     concatFlagAndArgs = false;
     wrapperFlag.pop_back();
   }
 
-  const std::string LINKER{ "LINKER:" };
-  const std::string SHELL{ "SHELL:" };
-  const std::string LINKER_SHELL = LINKER + SHELL;
+  std::string const PREFIX{ cmStrCat(prefix, ':') };
+  std::string const SHELL{ "SHELL:" };
+  std::string const PREFIX_SHELL = cmStrCat(PREFIX, SHELL);
 
   for (auto entry = result.begin(); entry != result.end();) {
-    if (entry->Value.compare(0, LINKER.length(), LINKER) != 0) {
+    if (entry->Value.compare(0, PREFIX.length(), PREFIX) != 0) {
       ++entry;
       continue;
     }
@@ -561,52 +607,62 @@ std::vector<BT<std::string>>& cmGeneratorTarget::ResolveLinkerWrapper(
     cmListFileBacktrace bt = std::move(entry->Backtrace);
     entry = result.erase(entry);
 
-    std::vector<std::string> linkerOptions;
-    if (value.compare(0, LINKER_SHELL.length(), LINKER_SHELL) == 0) {
+    std::vector<std::string> options;
+    if (value.compare(0, PREFIX_SHELL.length(), PREFIX_SHELL) == 0) {
       cmSystemTools::ParseUnixCommandLine(
-        value.c_str() + LINKER_SHELL.length(), linkerOptions);
+        value.c_str() + PREFIX_SHELL.length(), options);
     } else {
-      linkerOptions = cmTokenize(value.substr(LINKER.length()), ",");
+      options =
+        cmTokenize(value.substr(PREFIX.length()), ',', cmTokenizerMode::New);
     }
 
-    if (linkerOptions.empty() ||
-        (linkerOptions.size() == 1 && linkerOptions.front().empty())) {
+    if (options.empty()) {
       continue;
     }
 
     // for now, raise an error if prefix SHELL: is part of arguments
-    if (std::find_if(linkerOptions.begin(), linkerOptions.end(),
-                     [&SHELL](const std::string& item) -> bool {
+    if (std::find_if(options.begin(), options.end(),
+                     [&SHELL](std::string const& item) -> bool {
                        return item.find(SHELL) != std::string::npos;
-                     }) != linkerOptions.end()) {
+                     }) != options.end()) {
       this->LocalGenerator->GetCMakeInstance()->IssueMessage(
         MessageType::FATAL_ERROR,
-        "'SHELL:' prefix is not supported as part of 'LINKER:' arguments.",
+        cmStrCat("'SHELL:' prefix is not supported as part of '", prefix,
+                 ":' arguments."),
         this->GetBacktrace());
       return result;
     }
 
     // Very old versions of the C++ standard library return void for insert, so
     // can't use it to get the new iterator
-    const auto index = entry - result.begin();
-    std::vector<BT<std::string>> options =
-      wrapOptions(linkerOptions, bt, wrapperFlag, wrapperSep,
-                  concatFlagAndArgs, NestedLinkerFlags::PreserveAsSpelled);
+    auto const index = entry - result.begin();
+    std::vector<BT<std::string>> processedOptions =
+      wrapOptions(options, bt, wrapperFlag, wrapperSep, concatFlagAndArgs,
+                  NestedLinkerFlags::PreserveAsSpelled);
     if (joinItems) {
       result.insert(
-        entry, cmJoin(cmMakeRange(options.begin(), options.end()), " "_s));
+        entry,
+        cmJoin(cmMakeRange(processedOptions.begin(), processedOptions.end()),
+               " "_s));
       entry = std::next(result.begin(), index + 1);
     } else {
-      result.insert(entry, options.begin(), options.end());
-      entry = std::next(result.begin(), index + options.size());
+      result.insert(entry, processedOptions.begin(), processedOptions.end());
+      entry = std::next(result.begin(), index + processedOptions.size());
     }
   }
   return result;
 }
 
+std::vector<BT<std::string>>& cmGeneratorTarget::ResolveLinkerWrapper(
+  std::vector<BT<std::string>>& result, std::string const& language,
+  bool joinItems) const
+{
+  return this->ResolvePrefixWrapper(result, "LINKER"_s, language, joinItems);
+}
+
 void cmGeneratorTarget::GetStaticLibraryLinkOptions(
-  std::vector<std::string>& result, const std::string& config,
-  const std::string& language) const
+  std::vector<std::string>& result, std::string const& config,
+  std::string const& language) const
 {
   std::vector<BT<std::string>> tmp =
     this->GetStaticLibraryLinkOptions(config, language);
@@ -622,26 +678,39 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetStaticLibraryLinkOptions(
   std::vector<BT<std::string>> result;
   std::unordered_set<std::string> uniqueOptions;
 
-  cmGeneratorExpressionDAGChecker dagChecker(this, "STATIC_LIBRARY_OPTIONS",
-                                             nullptr, nullptr,
-                                             this->LocalGenerator, config);
+  cm::GenEx::Context context(this->LocalGenerator, config, language);
+
+  cmGeneratorExpressionDAGChecker dagChecker{
+    this, "STATIC_LIBRARY_OPTIONS", nullptr, nullptr, context,
+  };
 
   EvaluatedTargetPropertyEntries entries;
   if (cmValue linkOptions = this->GetProperty("STATIC_LIBRARY_OPTIONS")) {
     std::unique_ptr<TargetPropertyEntry> entry = TargetPropertyEntry::Create(
       *this->LocalGenerator->GetCMakeInstance(), *linkOptions);
-    entries.Entries.emplace_back(EvaluateTargetPropertyEntry(
-      this, config, language, &dagChecker, *entry));
+    entries.Entries.emplace_back(
+      EvaluateTargetPropertyEntry(this, context, &dagChecker, *entry));
   }
   processOptions(this, entries, result, uniqueOptions, false,
                  "static library link options", OptionsParse::Shell);
 
+  // Last step: replace "ARCHIVER:" prefixed elements by
+  // actual archiver wrapper
+  this->ResolveArchiverWrapper(result, language);
+
   return result;
 }
 
+std::vector<BT<std::string>>& cmGeneratorTarget::ResolveArchiverWrapper(
+  std::vector<BT<std::string>>& result, std::string const& language,
+  bool joinItems) const
+{
+  return this->ResolvePrefixWrapper(result, "ARCHIVER"_s, language, joinItems);
+}
+
 void cmGeneratorTarget::GetLinkDepends(std::vector<std::string>& result,
-                                       const std::string& config,
-                                       const std::string& language) const
+                                       std::string const& config,
+                                       std::string const& language) const
 {
   std::vector<BT<std::string>> tmp = this->GetLinkDepends(config, language);
   result.reserve(tmp.size());
@@ -655,21 +724,23 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetLinkDepends(
 {
   std::vector<BT<std::string>> result;
   std::unordered_set<std::string> uniqueOptions;
-  cmGeneratorExpressionDAGChecker dagChecker(
-    this, "LINK_DEPENDS", nullptr, nullptr, this->LocalGenerator, config);
+  cm::GenEx::Context context(this->LocalGenerator, config, language);
+  cmGeneratorExpressionDAGChecker dagChecker{
+    this, "LINK_DEPENDS", nullptr, nullptr, context,
+  };
 
   EvaluatedTargetPropertyEntries entries;
   if (cmValue linkDepends = this->GetProperty("LINK_DEPENDS")) {
     cmList depends{ *linkDepends };
-    for (const auto& depend : depends) {
+    for (auto const& depend : depends) {
       std::unique_ptr<TargetPropertyEntry> entry = TargetPropertyEntry::Create(
         *this->LocalGenerator->GetCMakeInstance(), depend);
-      entries.Entries.emplace_back(EvaluateTargetPropertyEntry(
-        this, config, language, &dagChecker, *entry));
+      entries.Entries.emplace_back(
+        EvaluateTargetPropertyEntry(this, context, &dagChecker, *entry));
     }
   }
-  AddInterfaceEntries(this, config, "INTERFACE_LINK_DEPENDS", language,
-                      &dagChecker, entries, IncludeRuntimeInterface::Yes,
+  AddInterfaceEntries(this, "INTERFACE_LINK_DEPENDS", context, &dagChecker,
+                      entries, IncludeRuntimeInterface::Yes,
                       this->GetPolicyStatusCMP0099() == cmPolicies::NEW
                         ? UseTo::Link
                         : UseTo::Compile);
@@ -678,4 +749,25 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetLinkDepends(
                  OptionsParse::None);
 
   return result;
+}
+
+cmGeneratorTarget::MsvcCharSet cmGeneratorTarget::GetMsvcCharSet(
+  std::string const& singleDefine)
+{
+  if (singleDefine == UNICODE_DEFINITION ||
+      cmHasLiteralPrefix(singleDefine, UNICODE_DEFINITION_PREFIX)) {
+    return MsvcCharSet::Unicode;
+  }
+
+  if (singleDefine == MBCS_DEFINITION ||
+      cmHasLiteralPrefix(singleDefine, MBCS_DEFINITION_PREFIX)) {
+    return MsvcCharSet::MultiByte;
+  }
+
+  if (singleDefine == SBCS_DEFINITION ||
+      cmHasLiteralPrefix(singleDefine, SBCS_DEFINITION_PREFIX)) {
+    return MsvcCharSet::SingleByte;
+  }
+
+  return MsvcCharSet::None;
 }

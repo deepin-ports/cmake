@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmCryptoHash.h"
 
 #include <cassert>
@@ -131,7 +131,7 @@ bool cmCryptoHash::IntFromHexDigit(char input, char& output)
 }
 
 std::string cmCryptoHash::ByteHashToString(
-  const std::vector<unsigned char>& hash)
+  std::vector<unsigned char> const& hash)
 {
   // Map from 4-bit index to hexadecimal representation.
   static char const hex[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
@@ -153,10 +153,9 @@ std::vector<unsigned char> cmCryptoHash::ByteHashString(cm::string_view input)
   return this->Finalize();
 }
 
-std::vector<unsigned char> cmCryptoHash::ByteHashFile(const std::string& file)
+std::vector<unsigned char> cmCryptoHash::ByteHashStream(std::istream& sin)
 {
-  cmsys::ifstream fin(file.c_str(), std::ios::in | std::ios::binary);
-  if (fin) {
+  if (sin) {
     this->Initialize();
     {
       // Should be efficient enough on most system:
@@ -169,14 +168,14 @@ std::vector<unsigned char> cmCryptoHash::ByteHashFile(const std::string& file)
       // incorrect to not check the error condition on the fin.read()
       // before using the data, but the fin.gcount() will be zero if an
       // error occurred.  Therefore, the loop should be safe everywhere.
-      while (fin) {
-        fin.read(buffer_c, sizeof(buffer));
-        if (int gcount = static_cast<int>(fin.gcount())) {
+      while (sin) {
+        sin.read(buffer_c, sizeof(buffer));
+        if (int gcount = static_cast<int>(sin.gcount())) {
           this->Append(buffer_uc, gcount);
         }
       }
     }
-    if (fin.eof()) {
+    if (sin.eof()) {
       // Success
       return this->Finalize();
     }
@@ -187,12 +186,23 @@ std::vector<unsigned char> cmCryptoHash::ByteHashFile(const std::string& file)
   return std::vector<unsigned char>();
 }
 
+std::vector<unsigned char> cmCryptoHash::ByteHashFile(std::string const& file)
+{
+  cmsys::ifstream fin(file.c_str(), std::ios::in | std::ios::binary);
+  return this->ByteHashStream(fin);
+}
+
 std::string cmCryptoHash::HashString(cm::string_view input)
 {
   return ByteHashToString(this->ByteHashString(input));
 }
 
-std::string cmCryptoHash::HashFile(const std::string& file)
+std::string cmCryptoHash::HashStream(std::istream& sin)
+{
+  return ByteHashToString(this->ByteHashStream(sin));
+}
+
+std::string cmCryptoHash::HashFile(std::string const& file)
 {
   return ByteHashToString(this->ByteHashFile(file));
 }

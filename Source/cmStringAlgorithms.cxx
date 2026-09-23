@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmStringAlgorithms.h"
 
 #include <algorithm>
@@ -8,13 +8,26 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "cmsys/String.h"
+
+bool cmStrCaseEq(cm::string_view s1, cm::string_view s2)
+{
+  if (s1.size() != s2.size()) {
+    return false;
+  }
+
+  return std::equal(s1.begin(), s1.end(), s2.begin(), [](char a, char b) {
+    return cmsysString_tolower(a) == cmsysString_tolower(b);
+  });
+}
+
 std::string cmTrimWhitespace(cm::string_view str)
 {
   // XXX(clang-tidy): This declaration and the next cannot be `const auto*`
   // because the qualification of `auto` is platform-dependent.
   // NOLINTNEXTLINE(readability-qualified-auto)
   auto start = str.begin();
-  while (start != str.end() && cmIsSpace(*start)) {
+  while (start != str.end() && cmsysString_isspace(*start)) {
     ++start;
   }
   if (start == str.end()) {
@@ -22,10 +35,28 @@ std::string cmTrimWhitespace(cm::string_view str)
   }
   // NOLINTNEXTLINE(readability-qualified-auto)
   auto stop = str.end() - 1;
-  while (cmIsSpace(*stop)) {
+  while (cmsysString_isspace(*stop)) {
     --stop;
   }
   return std::string(start, stop + 1);
+}
+
+cm::string_view cmStripWhitespace(cm::string_view str)
+{
+  std::string::size_type const l = str.size();
+
+  std::string::size_type s = 0;
+  while (s < l && cmsysString_isspace(str[s])) {
+    ++s;
+  }
+  if (s == l) {
+    return cm::string_view{};
+  }
+  std::string::size_type e = l - 1;
+  while (cmsysString_isspace(str[e])) {
+    --e;
+  }
+  return str.substr(s, e + 1 - s);
 }
 
 std::string cmRemoveQuotes(cm::string_view str)
@@ -46,7 +77,7 @@ std::string cmEscapeQuotes(cm::string_view str)
 {
   std::string result;
   result.reserve(str.size());
-  for (const char ch : str) {
+  for (char const ch : str) {
     if (ch == '"') {
       result += '\\';
     }
@@ -55,34 +86,10 @@ std::string cmEscapeQuotes(cm::string_view str)
   return result;
 }
 
-std::vector<std::string> cmTokenize(cm::string_view str, cm::string_view sep)
-{
-  std::vector<std::string> tokens;
-  cm::string_view::size_type tokend = 0;
-
-  do {
-    cm::string_view::size_type tokstart = str.find_first_not_of(sep, tokend);
-    if (tokstart == cm::string_view::npos) {
-      break; // no more tokens
-    }
-    tokend = str.find_first_of(sep, tokstart);
-    if (tokend == cm::string_view::npos) {
-      tokens.emplace_back(str.substr(tokstart));
-    } else {
-      tokens.emplace_back(str.substr(tokstart, tokend - tokstart));
-    }
-  } while (tokend != cm::string_view::npos);
-
-  if (tokens.empty()) {
-    tokens.emplace_back();
-  }
-  return tokens;
-}
-
 namespace {
 template <std::size_t N, typename T>
 inline void MakeDigits(cm::string_view& view, char (&digits)[N],
-                       const char* pattern, T value)
+                       char const* pattern, T value)
 {
   int res = std::snprintf(digits, N, pattern, value);
   if (res > 0 && res < static_cast<int>(N)) {
@@ -174,7 +181,7 @@ std::string cmCatViews(
   return result;
 }
 
-bool cmStrToLong(const char* str, long* value)
+bool cmStrToLong(char const* str, long* value)
 {
   errno = 0;
   char* endp;
@@ -187,11 +194,11 @@ bool cmStrToLong(std::string const& str, long* value)
   return cmStrToLong(str.c_str(), value);
 }
 
-bool cmStrToULong(const char* str, unsigned long* value)
+bool cmStrToULong(char const* str, unsigned long* value)
 {
   errno = 0;
   char* endp;
-  while (cmIsSpace(*str)) {
+  while (cmsysString_isspace(*str)) {
     ++str;
   }
   if (*str == '-') {
@@ -206,7 +213,7 @@ bool cmStrToULong(std::string const& str, unsigned long* value)
   return cmStrToULong(str.c_str(), value);
 }
 
-bool cmStrToLongLong(const char* str, long long* value)
+bool cmStrToLongLong(char const* str, long long* value)
 {
   errno = 0;
   char* endp;
@@ -219,11 +226,11 @@ bool cmStrToLongLong(std::string const& str, long long* value)
   return cmStrToLongLong(str.c_str(), value);
 }
 
-bool cmStrToULongLong(const char* str, unsigned long long* value)
+bool cmStrToULongLong(char const* str, unsigned long long* value)
 {
   errno = 0;
   char* endp;
-  while (cmIsSpace(*str)) {
+  while (cmsysString_isspace(*str)) {
     ++str;
   }
   if (*str == '-') {
@@ -244,7 +251,7 @@ std::string cmJoin(std::vector<std::string> const& rng,
   return cmJoinStrings(rng, separator, initial);
 }
 
-std::string cmJoin(cmStringRange const& rng, cm::string_view separator,
+std::string cmJoin(cmStringRange rng, cm::string_view separator,
                    cm::string_view initial)
 {
   return cmJoinStrings(rng, separator, initial);

@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #pragma once
 
 #include "cmConfigure.h" // IWYU pragma: keep
@@ -10,26 +10,30 @@
 
 #include "cmListFileCache.h"
 
+namespace cm {
+namespace GenEx {
+struct Context;
+struct Evaluation;
+}
+}
+
 struct GeneratorExpressionContent;
-struct cmGeneratorExpressionContext;
 class cmGeneratorTarget;
-class cmLocalGenerator;
 
 struct cmGeneratorExpressionDAGChecker
 {
-  cmGeneratorExpressionDAGChecker(cmListFileBacktrace backtrace,
-                                  cmGeneratorTarget const* target,
-                                  std::string property,
-                                  const GeneratorExpressionContent* content,
-                                  cmGeneratorExpressionDAGChecker* parent,
-                                  cmLocalGenerator const* contextLG,
-                                  std::string const& contextConfig);
-  cmGeneratorExpressionDAGChecker(cmGeneratorTarget const* target,
-                                  std::string property,
-                                  const GeneratorExpressionContent* content,
-                                  cmGeneratorExpressionDAGChecker* parent,
-                                  cmLocalGenerator const* contextLG,
-                                  std::string const& contextConfig);
+  enum class ComputingLinkLibraries
+  {
+    No,
+    Yes,
+  };
+  cmGeneratorExpressionDAGChecker(
+    cmGeneratorTarget const* target, std::string property,
+    GeneratorExpressionContent const* content,
+    cmGeneratorExpressionDAGChecker* parent, cm::GenEx::Context const& context,
+    cmListFileBacktrace backtrace = cmListFileBacktrace(),
+    ComputingLinkLibraries computingLinkLibraries =
+      ComputingLinkLibraries::No);
 
   enum Result
   {
@@ -41,8 +45,7 @@ struct cmGeneratorExpressionDAGChecker
 
   Result Check() const;
 
-  void ReportError(cmGeneratorExpressionContext* context,
-                   const std::string& expr);
+  void ReportError(cm::GenEx::Evaluation* eval, std::string const& expr);
 
   bool EvaluatingTransitiveProperty() const;
   bool EvaluatingGenexExpression() const;
@@ -51,6 +54,11 @@ struct cmGeneratorExpressionDAGChecker
   bool EvaluatingLinkExpression() const;
   bool EvaluatingLinkOptionsExpression() const;
   bool EvaluatingLinkerLauncher() const;
+
+  /** Returns true only when computing the actual link dependency
+      graph for cmGeneratorTarget::GetLinkImplementationLibraries
+      or cmGeneratorTarget::GetLinkInterfaceLibraries.  */
+  bool IsComputingLinkLibraries() const;
 
   enum class ForGenex
   {
@@ -74,15 +82,17 @@ struct cmGeneratorExpressionDAGChecker
 private:
   Result CheckGraph() const;
 
-  const cmGeneratorExpressionDAGChecker* const Parent;
-  const cmGeneratorExpressionDAGChecker* const Top;
+  cmGeneratorExpressionDAGChecker const* const Parent;
+  cmGeneratorExpressionDAGChecker const* const Top;
   cmGeneratorTarget const* Target;
-  const std::string Property;
+  std::string const Property;
   mutable std::map<cmGeneratorTarget const*, std::set<std::string>> Seen;
-  const GeneratorExpressionContent* const Content;
-  const cmListFileBacktrace Backtrace;
+  GeneratorExpressionContent const* const Content;
+  cmListFileBacktrace const Backtrace;
   Result CheckResult;
   bool TransitivePropertiesOnly = false;
   bool CMP0131 = false;
   bool TopIsTransitiveProperty = false;
+  ComputingLinkLibraries const ComputingLinkLibraries_ =
+    ComputingLinkLibraries::No;
 };

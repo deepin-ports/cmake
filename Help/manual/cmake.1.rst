@@ -167,12 +167,12 @@ the current working directory (cwd) is used for the other.  For example:
 ============================== ============ ===========
  Command Line                   Source Dir   Build Dir
 ============================== ============ ===========
- ``cmake -B build``             `cwd`        ``build``
+ ``cmake -B build``             *cwd*        ``build``
  ``cmake -B build src``         ``src``      ``build``
  ``cmake -B build -S src``      ``src``      ``build``
- ``cmake src``                  ``src``      `cwd`
- ``cmake build`` (existing)     `loaded`     ``build``
- ``cmake -S src``               ``src``      `cwd`
+ ``cmake src``                  ``src``      *cwd*
+ ``cmake build`` (existing)     *loaded*     ``build``
+ ``cmake -S src``               ``src``      *cwd*
  ``cmake -S src build``         ``src``      ``build``
  ``cmake -S src -B build``      ``src``      ``build``
 ============================== ============ ===========
@@ -203,7 +203,7 @@ Options
 
 .. program:: cmake
 
-.. include:: OPTIONS_BUILD.txt
+.. include:: include/OPTIONS_BUILD.rst
 
 .. option:: --fresh
 
@@ -252,11 +252,145 @@ Options
 
 .. option:: --graphviz=<file>
 
- Generate graphviz of dependencies, see :module:`CMakeGraphVizOptions` for more.
+  Generate `Graphviz <https://www.graphviz.org/>`_ of dependencies
 
- Generate a graphviz input file that will contain all the library and
- executable dependencies in the project.  See the documentation for
- :module:`CMakeGraphVizOptions` for more details.
+  This option generates a graphviz input file that will contain all the
+  library and executable dependencies in the project showing the
+  dependencies between the targets in a project, as well as external libraries
+  which are linked against.
+
+  When running CMake with the ``--graphviz=foo.dot`` option, it produces:
+
+  * a ``foo.dot`` file, showing all dependencies in the project
+  * a ``foo.dot.<target>`` file for each target, showing on which other targets
+    it depends
+  * a ``foo.dot.<target>.dependers`` file for each target, showing which other
+    targets depend on it
+
+  Those .dot files can be converted to images using the *dot* command from the
+  Graphviz package:
+
+  .. code-block:: shell
+
+    dot -Tpng -o foo.png foo.dot
+
+  .. versionadded:: 3.10
+    The different dependency types ``PUBLIC``, ``INTERFACE`` and ``PRIVATE``
+    are represented as solid, dashed and dotted edges.
+
+  .. rubric:: Variables specific to the Graphviz support
+
+  The resulting graphs can be huge.  The look and content of the generated graphs
+  can be controlled using the file ``CMakeGraphVizOptions.cmake``.  This file is
+  first searched in :variable:`CMAKE_BINARY_DIR`, and then in
+  :variable:`CMAKE_SOURCE_DIR`.  If found, the variables set in it are used to
+  adjust options for the generated Graphviz files.
+
+  .. variable:: GRAPHVIZ_GRAPH_NAME
+
+    The graph name.
+
+    * Mandatory: NO
+    * Default: value of :variable:`CMAKE_PROJECT_NAME`
+
+  .. variable:: GRAPHVIZ_GRAPH_HEADER
+
+    The header written at the top of the Graphviz files.
+
+    * Mandatory: NO
+    * Default: "node [ fontsize = "12" ];"
+
+  .. variable:: GRAPHVIZ_NODE_PREFIX
+
+    The prefix for each node in the Graphviz files.
+
+    * Mandatory: NO
+    * Default: "node"
+
+  .. variable:: GRAPHVIZ_EXECUTABLES
+
+    Set to FALSE to exclude executables from the generated graphs.
+
+    * Mandatory: NO
+    * Default: TRUE
+
+  .. variable:: GRAPHVIZ_STATIC_LIBS
+
+    Set to FALSE to exclude static libraries from the generated graphs.
+
+    * Mandatory: NO
+    * Default: TRUE
+
+  .. variable:: GRAPHVIZ_SHARED_LIBS
+
+    Set to FALSE to exclude shared libraries from the generated graphs.
+
+    * Mandatory: NO
+    * Default: TRUE
+
+  .. variable:: GRAPHVIZ_MODULE_LIBS
+
+    Set to FALSE to exclude module libraries from the generated graphs.
+
+    * Mandatory: NO
+    * Default: TRUE
+
+  .. variable:: GRAPHVIZ_INTERFACE_LIBS
+
+    Set to FALSE to exclude interface libraries from the generated graphs.
+
+    * Mandatory: NO
+    * Default: TRUE
+
+  .. variable:: GRAPHVIZ_OBJECT_LIBS
+
+    Set to FALSE to exclude object libraries from the generated graphs.
+
+    * Mandatory: NO
+    * Default: TRUE
+
+  .. variable:: GRAPHVIZ_UNKNOWN_LIBS
+
+    Set to FALSE to exclude unknown libraries from the generated graphs.
+
+    * Mandatory: NO
+    * Default: TRUE
+
+  .. variable:: GRAPHVIZ_EXTERNAL_LIBS
+
+    Set to FALSE to exclude external libraries from the generated graphs.
+
+    * Mandatory: NO
+    * Default: TRUE
+
+  .. variable:: GRAPHVIZ_CUSTOM_TARGETS
+
+    Set to TRUE to include custom targets in the generated graphs.
+
+    * Mandatory: NO
+    * Default: FALSE
+
+  .. variable:: GRAPHVIZ_IGNORE_TARGETS
+
+    A list of regular expressions for names of targets to exclude from the
+    generated graphs.
+
+    * Mandatory: NO
+    * Default: empty
+
+  .. variable:: GRAPHVIZ_GENERATE_PER_TARGET
+
+    Set to FALSE to not generate per-target graphs ``foo.dot.<target>``.
+
+    * Mandatory: NO
+    * Default: TRUE
+
+  .. variable:: GRAPHVIZ_GENERATE_DEPENDERS
+
+    Set to FALSE to not generate depender graphs ``foo.dot.<target>.dependers``.
+
+    * Mandatory: NO
+    * Default: TRUE
 
 .. option:: --system-information [file]
 
@@ -306,6 +440,16 @@ Options
  :variable:`CMAKE_MESSAGE_CONTEXT_SHOW` as a cache variable instead.
  When this command line option is given, :variable:`CMAKE_MESSAGE_CONTEXT_SHOW`
  is ignored.
+
+.. option:: --sarif-output=<path>
+
+ .. versionadded:: 4.0
+
+ Enable logging of diagnostic messages produced by CMake in the SARIF format.
+
+ Write diagnostic messages to a SARIF file at the path specified. Projects can
+ also set :variable:`CMAKE_EXPORT_SARIF` to ``ON`` to enable this feature for a
+ build tree.
 
 .. option:: --debug-trycompile
 
@@ -395,7 +539,7 @@ Options
 
    ``json-v1``
      Prints each line as a separate JSON document. Each document is
-     separated by a newline ( ``\n`` ). It is guaranteed that no
+     separated by a newline (``\n``). It is guaranteed that no
      newline characters will be present inside a JSON document.
 
      .. code-block:: json
@@ -513,6 +657,14 @@ Options
  :variable:`CMAKE_COMPILE_WARNING_AS_ERROR`, preventing warnings from being
  treated as errors on compile.
 
+.. option:: --link-no-warning-as-error
+
+ .. versionadded:: 4.0
+
+ Ignore target property :prop_tgt:`LINK_WARNING_AS_ERROR` and variable
+ :variable:`CMAKE_LINK_WARNING_AS_ERROR`, preventing warnings from being
+ treated as errors on link.
+
 .. option:: --profiling-output=<path>
 
  .. versionadded:: 3.18
@@ -554,6 +706,11 @@ Options
  be overridden by manually specifying them on the command line. For example,
  if the preset sets a variable called ``MYVAR`` to ``1``, but the user sets
  it to ``2`` with a ``-D`` argument, the value ``2`` is preferred.
+
+ .. versionadded:: 3.21
+   The ``-B`` option may optionally be specified with a different binary
+   directory than the one specified by the ``binaryDir`` key of the
+   configure preset.
 
 .. option:: --list-presets[=<type>]
 
@@ -638,9 +795,13 @@ following options:
 .. option:: --preset <preset>, --preset=<preset>
 
   Use a build preset to specify build options. The project binary directory
-  is inferred from the ``configurePreset`` key. The current working directory
-  must contain CMake preset files.
-  See :manual:`preset <cmake-presets(7)>` for more details.
+  is inferred from the ``configurePreset`` key unless a directory is specified
+  after ``--build``. The current working directory must contain CMake preset
+  files. See :manual:`preset <cmake-presets(7)>` for more details.
+
+  .. versionadded:: 4.3
+    ``cmake --build`` now supports specifying a build directory and
+    preset together.
 
 .. option:: --list-presets
 
@@ -694,7 +855,7 @@ following options:
   specific cache variable will be evaluated to decide, if package restoration
   should be performed.
 
-  When using the Visual Studio generator, package references are defined
+  When using :ref:`Visual Studio Generators`, package references are defined
   using the :prop_tgt:`VS_PACKAGE_REFERENCES` property. Package references
   are restored using NuGet. It can be disabled by setting the
   ``CMAKE_VS_NUGET_PACKAGE_RESTORE`` variable to ``OFF``.
@@ -717,6 +878,19 @@ following options:
   Pass remaining options to the native tool.
 
 Run :option:`cmake --build` with no options for quick help.
+
+Generator-Specific Build Tool Behavior
+--------------------------------------
+
+``cmake --build`` has special behavior with some generators:
+
+:generator:`Xcode`
+
+  .. versionadded:: 4.1
+
+    If a third-party tool has written a ``.xcworkspace`` next to
+    the CMake-generated ``.xcodeproj``, ``cmake --build`` drives
+    the build through the workspace instead.
 
 Install a Project
 =================
@@ -754,7 +928,23 @@ The options are:
 
 .. option:: --prefix <prefix>
 
-  Override the installation prefix, :variable:`CMAKE_INSTALL_PREFIX`.
+  Specifies an alternative installation prefix, temporarily replacing the
+  value of the :variable:`CMAKE_INSTALL_PREFIX` variable at the installation
+  phase.
+
+  The main purpose of this option is to allow installation to occur in an
+  arbitrary location.  This is commonly used in certain installation and
+  packaging workflows.  It is analogous to selecting the installation
+  directory during the installation phase.  For example, on Windows, where
+  a user may choose the destination folder for the project.
+
+  .. note::
+
+    When the project is using the :module:`GNUInstallDirs` module, there are
+    some :ref:`special cases <GNUInstallDirs special cases>` that are
+    evaluated based on the value of the :variable:`CMAKE_INSTALL_PREFIX`
+    variable during the configuration phase.  The results persist even if an
+    alternative prefix is used during installation.
 
 .. option:: --strip
 
@@ -841,6 +1031,78 @@ CMake provides builtin command-line tools through the signature
 .. program:: cmake-E
 
 Available commands are:
+
+.. option:: bin2c [<options>...] [--] [<input-file> [<output-file>]]
+
+  .. versionadded:: 4.3
+
+  Convert a binary file to a C array. If input file is unspecified or ``-``,
+  read from standard input instead of a file. If output file is unspecified or
+  ``-``, write to standard output instead of a file.
+
+  By default, this prints only the bytes. Enclosing text can be added with the
+  ``--template-file`` argument. You can also ``#include`` the bytes from
+  another file, acting as a drop-in replacement for the ``#embed`` directive
+  from C23 and C++26:
+
+  .. code-block:: c
+
+    unsigned char my_bytes[] = {
+    /* #embed "bin2c_input.bin" */
+    #include "bin2c_output.c.txt"
+    };
+
+  .. program:: cmake-E_bin2c
+
+  .. option:: --signed
+
+    Print the bytes as signed integers rather than unsigned.
+
+  .. option:: --decimal
+
+    Print the bytes as decimal rather than hexadecimal.
+
+  .. option:: --trailing-comma
+
+    Append a trailing comma after the last byte (not included by default.)
+
+  .. option:: --template-file <template-file>
+
+    Format from a template file. The template file contains placeholders for
+    the array and optionally the length (which will be a non-negative decimal
+    integer). Such placeholders are enclosed in ``@`` at the beginning and end
+    of the placeholder. This functionality is similar to
+    :command:`configure_file` called with the ``@ONLY`` argument, but only the
+    array and length placeholders will be replaced, and any other placeholders
+    will be left as-is.
+
+    An example of a potential template file:
+
+    .. code-block:: text
+
+      unsigned char my_bytes[] = {@array@};
+
+      size_t length = @length@;
+
+    The array placeholder may occur at most once in the template file. The
+    length placeholder may occur zero or more times after the array
+    placeholder, but not before it.
+
+    Note that the length is the number of elements printed, and may not match
+    the ``sizeof`` the resulting array if a type other than ``unsigned char``
+    is used.
+
+  .. option:: --template-array-placeholder <placeholder-name>
+
+    Specify a name for the array placeholder in the template file. Set to
+    ``array`` by default.
+
+  .. option:: --template-length-placeholder <placeholder-name>
+
+    Specify a name for the length placeholder in the template file. Set to
+    ``length`` by default.
+
+.. program:: cmake-E
 
 .. option:: capabilities
 
@@ -998,6 +1260,19 @@ Available commands are:
   ``copy_directory_if_different`` does follow symlinks.
   The command fails when the source directory does not exist.
 
+.. option:: copy_directory_if_newer <dir>... <destination>
+
+  .. versionadded:: 4.2
+
+  Copy content of ``<dir>...`` directories to ``<destination>`` directory
+  if source files are newer than destination files (based on file timestamps).
+  If ``<destination>`` directory does not exist it will be created.
+
+  ``copy_directory_if_newer`` does follow symlinks.
+  The command fails when the source directory does not exist.
+  This is faster than ``copy_directory_if_different`` as it only compares
+  file timestamps instead of file contents.
+
 .. option:: copy_if_different <file>... <destination>
 
   Copy files to ``<destination>`` (either file or directory) if
@@ -1008,6 +1283,18 @@ Available commands are:
 
   .. versionadded:: 3.5
     Support for multiple input files.
+
+.. option:: copy_if_newer <file>... <destination>
+
+  .. versionadded:: 4.2
+
+  Copy files to ``<destination>`` (either file or directory) if
+  source files are newer than destination files (based on file timestamps).
+  If multiple files are specified, the ``<destination>`` must be
+  directory and it must exist.
+  ``copy_if_newer`` does follow symlinks.
+  This is faster than ``copy_if_different`` as it only compares
+  file timestamps instead of file contents.
 
 .. option:: create_symlink <old> <new>
 
@@ -1102,6 +1389,9 @@ Available commands are:
      351abe79cd3800b38cdfb25d45015a15  file1.txt
      052f86c15bbde68af55c7f7b340ab639  file2.txt
 
+  .. versionchanged:: 4.3
+    Passing ``-`` reads from standard input.
+
 .. option:: sha1sum <file>...
 
   .. versionadded:: 3.10
@@ -1110,6 +1400,9 @@ Available commands are:
 
      4bb7932a29e6f73c97bb9272f2bdc393122f86e0  file1.txt
      1df4c8f318665f9a5f2ed38f55adadb7ef9f559c  file2.txt
+
+  .. versionchanged:: 4.3
+    Passing ``-`` reads from standard input.
 
 .. option:: sha224sum <file>...
 
@@ -1120,6 +1413,9 @@ Available commands are:
      b9b9346bc8437bbda630b0b7ddfc5ea9ca157546dbbf4c613192f930  file1.txt
      6dfbe55f4d2edc5fe5c9197bca51ceaaf824e48eba0cc453088aee24  file2.txt
 
+  .. versionchanged:: 4.3
+    Passing ``-`` reads from standard input.
+
 .. option:: sha256sum <file>...
 
   .. versionadded:: 3.10
@@ -1128,6 +1424,9 @@ Available commands are:
 
      76713b23615d31680afeb0e9efe94d47d3d4229191198bb46d7485f9cb191acc  file1.txt
      15b682ead6c12dedb1baf91231e1e89cfc7974b3787c1e2e01b986bffadae0ea  file2.txt
+
+  .. versionchanged:: 4.3
+    Passing ``-`` reads from standard input.
 
 .. option:: sha384sum <file>...
 
@@ -1138,6 +1437,9 @@ Available commands are:
      acc049fedc091a22f5f2ce39a43b9057fd93c910e9afd76a6411a28a8f2b8a12c73d7129e292f94fc0329c309df49434  file1.txt
      668ddeb108710d271ee21c0f3acbd6a7517e2b78f9181c6a2ff3b8943af92b0195dcb7cce48aa3e17893173c0a39e23d  file2.txt
 
+  .. versionchanged:: 4.3
+    Passing ``-`` reads from standard input.
+
 .. option:: sha512sum <file>...
 
   .. versionadded:: 3.10
@@ -1146,6 +1448,9 @@ Available commands are:
 
      2a78d7a6c5328cfb1467c63beac8ff21794213901eaadafd48e7800289afbc08e5fb3e86aa31116c945ee3d7bf2a6194489ec6101051083d1108defc8e1dba89  file1.txt
      7a0b54896fe5e70cca6dd643ad6f672614b189bf26f8153061c4d219474b05dad08c4e729af9f4b009f1a1a280cb625454bf587c690f4617c27e3aebdf3b7a2d  file2.txt
+
+  .. versionchanged:: 4.3
+    Passing ``-`` reads from standard input.
 
 .. option:: remove [-f] <file>...
 
@@ -1226,6 +1531,10 @@ Available commands are:
       When extracting selected files or directories, you must provide their exact
       names including the path, as printed by list (``-t``).
 
+    .. versionchanged:: 4.3
+      Archive entries containing path traversal sequences (``..``), or
+      absolute paths, are rejected for security.
+
   .. option:: t
 
     List archive contents.
@@ -1240,7 +1549,7 @@ Available commands are:
 
   .. option:: z
 
-    Compress the resulting archive with gzip.
+    Compress the resulting archive with gzip (Deflate).
 
   .. option:: j
 
@@ -1250,13 +1559,19 @@ Available commands are:
 
     .. versionadded:: 3.1
 
-    Compress the resulting archive with XZ.
+    Compress the resulting archive with XZ (LZMA2).
 
   .. option:: --zstd
 
     .. versionadded:: 3.15
 
     Compress the resulting archive with Zstandard.
+
+  .. option:: --lzma
+
+    .. versionadded:: 4.3
+
+    Compress the resulting archive with LZMA algorithm.
 
   .. option:: --files-from=<file>
 
@@ -1272,14 +1587,90 @@ Available commands are:
     .. versionadded:: 3.3
 
     Specify the format of the archive to be created.
-    Supported formats are: ``7zip``, ``gnutar``, ``pax``,
-    ``paxr`` (restricted pax, default), and ``zip``.
+    Supported formats are:
+
+    * ``7zip``
+    * ``gnutar``
+    * ``pax``
+    * ``paxr`` (restricted pax, default)
+    * ``raw``
+
+      .. versionadded:: 4.3
+
+      If this format is used, only one file will be compressed
+      with the compression type specified by the
+      :option:`--cmake-tar-compression-method <cmake-E_tar --cmake-tar-compression-method>`.
+
+    * ``zip``
+
+    If the compression method is not specified, the compression method
+    depends on the format:
+
+    * ``7zip`` uses ``LZMA`` compression
+    * ``zip`` uses ``Deflate`` compression
+    * others uses no compression by default
+
+    .. versionadded:: 4.3
+
+      The ``7zip`` and ``zip`` formats support changing the default compression
+      method and compression level.
 
   .. option:: --mtime=<date>
 
     .. versionadded:: 3.1
 
     Specify modification time recorded in tarball entries.
+
+  .. option:: --cmake-tar-compression-method=<compression-method>
+
+    .. versionadded:: 4.3
+
+    The ``<compression-method>`` must be one of the following:
+
+    * ``none`` or ``store`` - no compression is used
+    * ``deflate`` or ``gzip`` - Deflate-based
+    * ``bzip2`` - BZip2-based
+    * ``lzma`` - LZMA-based
+    * ``lzma2`` or ``xz`` - LZMA2-based
+    * ``ppmd`` - PPMd-based
+
+      This compression method is only supported by the ``7zip`` archive format.
+
+    * ``zstd`` - Zstandard-based
+
+    This is the second variant for the compression method selection.
+    It provide more compression methods, that the classic ``tar``-like interface.
+    You can use any of them.
+
+    The default value depends on the :option:`--format <cmake-E_tar --format>`
+    option value and described in the corresponding section.
+
+  .. option:: --cmake-tar-compression-level=<compression-level>
+
+    .. versionadded:: 4.3
+
+    The ``<compression-level>`` should be between ``0`` and ``9``, with the
+    default being ``0``.  The compression algorithm must be selected when
+    the ``--cmake-tar-compression-level`` option is given.
+
+    The ``<compression-level>`` of the ``Zstd`` algorithm can be set
+    between ``0`` and ``19``, except for the ``zip`` format.
+
+    The value ``0`` is used to specify the default compression level.
+    It is selected automatically by the archive library backend and
+    not directly set by CMake itself. The default compression level
+    may vary between archive formats, platforms, etc.
+
+  .. option:: --cmake-tar-threads=<number>
+
+    .. versionadded:: 4.3
+
+    Use the ``<number>`` threads to operate on the archive. Currently only
+    multi-threaded compression is supported.
+
+    If set to ``0``, the number of available cores on the machine will be
+    used instead. Note that not all compression modes support threading
+    in all environments.
 
   .. option:: --touch
 
@@ -1371,14 +1762,51 @@ CMake provides a pkg-config like helper for Makefile-based projects:
 
   cmake --find-package [<options>]
 
-It searches a package using :command:`find_package()` and prints the
-resulting flags to stdout.  This can be used instead of pkg-config
-to find installed libraries in plain Makefile-based projects or in
-autoconf-based projects (via ``share/aclocal/cmake.m4``).
-
 .. note::
   This mode is not well-supported due to some technical limitations.
   It is kept for compatibility but should not be used in new projects.
+
+.. option:: --find-package
+
+  It searches a package using the :command:`find_package` command and prints the
+  resulting flags to stdout.  This can be used instead of pkg-config to find
+  installed libraries in plain Makefile-based projects or in Autoconf-based
+  projects, using auxiliary macros installed in ``share/aclocal/cmake.m4`` on
+  the system.
+
+  When using this option, the following variables are expected:
+
+  ``NAME``
+    Name of the package as called in ``find_package(<PackageName>)``.
+
+  ``COMPILER_ID``
+    :variable:`Compiler ID <CMAKE_<LANG>_COMPILER_ID>` used for searching the
+    package, i.e. GNU/Intel/Clang/MSVC, etc.
+
+  ``LANGUAGE``
+    Language used for searching the package, i.e. C/CXX/Fortran/ASM, etc.
+
+  ``MODE``
+    The package search mode.  Value can be one of:
+
+    ``EXIST``
+      Only checks for existence of the given package.
+
+    ``COMPILE``
+      Prints the flags needed for compiling an object file which uses the given
+      package.
+
+    ``LINK``
+      Prints the flags needed for linking when using the given package.
+
+  ``SILENT``
+    (Optional) If TRUE, find result message is not printed.
+
+  For example:
+
+  .. code-block:: shell
+
+    cmake --find-package -DNAME=CURL -DCOMPILER_ID=GNU -DLANGUAGE=C -DMODE=LINK
 
 .. _`Workflow Mode`:
 
@@ -1443,7 +1871,7 @@ To print selected pages from the CMake documentation, use
 
 with one of the following options:
 
-.. include:: OPTIONS_HELP.txt
+.. include:: include/OPTIONS_HELP.rst
 
 To view the presets available for a project, use
 
@@ -1466,4 +1894,4 @@ or another error condition, then a non-zero exit code is returned.
 See Also
 ========
 
-.. include:: LINKS.txt
+.. include:: include/LINKS.rst

@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #pragma once
 
 #include <map>
@@ -7,6 +7,7 @@
 #include <string>
 
 #include "cmCPackGenerator.h"
+#include "cmWIXInstallScope.h"
 #include "cmWIXPatch.h"
 #include "cmWIXShortcut.h"
 
@@ -24,8 +25,8 @@ public:
   cmCPackTypeMacro(cmCPackWIXGenerator, cmCPackGenerator);
 
   cmCPackWIXGenerator();
-  cmCPackWIXGenerator(const cmCPackWIXGenerator&) = delete;
-  const cmCPackWIXGenerator& operator=(const cmCPackWIXGenerator&) = delete;
+  cmCPackWIXGenerator(cmCPackWIXGenerator const&) = delete;
+  cmCPackWIXGenerator const& operator=(cmCPackWIXGenerator const&) = delete;
   ~cmCPackWIXGenerator();
 
 protected:
@@ -33,7 +34,7 @@ protected:
 
   int PackageFiles() override;
 
-  const char* GetOutputExtension() override { return ".msi"; }
+  char const* GetOutputExtension() override { return ".msi"; }
 
   enum CPackSetDestdirSupport SupportsSetDestdir() const override
   {
@@ -86,7 +87,8 @@ private:
     std::string const& rootPath, std::string const& featureId,
     cmWIXDirectoriesSourceWriter& directoryDefinitions,
     cmWIXFilesSourceWriter& fileDefinitions,
-    cmWIXFeaturesSourceWriter& featureDefinitions, cmWIXShortcuts& shortcuts);
+    cmWIXFeaturesSourceWriter& featureDefinitions, cmWIXShortcuts& shortcuts,
+    int diskId);
 
   bool CreateShortcuts(std::string const& cpackComponentName,
                        std::string const& featureId,
@@ -122,7 +124,7 @@ private:
     cmWIXFeaturesSourceWriter& featureDefinitions,
     std::vector<std::string> const& packageExecutables,
     std::vector<std::string> const& desktopExecutables,
-    cmWIXShortcuts& shortcuts);
+    cmWIXShortcuts& shortcuts, int diskId);
 
   bool RequireOption(std::string const& name, std::string& value) const;
 
@@ -157,6 +159,8 @@ private:
   std::string RelativePathWithoutComponentPrefix(std::string const& path);
 
   void InjectXmlNamespaces(cmWIXSourceWriter& sourceWriter);
+
+  cmWIXInstallScope GetInstallScope() const;
 
   std::vector<std::string> WixSources;
   id_map_t PathToIdMap;

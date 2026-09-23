@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmExportAndroidMKGenerator.h"
 
 #include <sstream>
@@ -12,13 +12,9 @@
 #include "cmGeneratorTarget.h"
 #include "cmLinkItem.h"
 #include "cmList.h"
-#include "cmMakefile.h"
-#include "cmMessageType.h"
-#include "cmPolicies.h"
 #include "cmStateTypes.h"
 #include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
-#include "cmTarget.h"
 
 cmExportAndroidMKGenerator::cmExportAndroidMKGenerator() = default;
 
@@ -52,20 +48,6 @@ void cmExportAndroidMKGenerator::GenerateInterfaceProperties(
     (this->Configurations.empty() ? std::string{} : this->Configurations[0]);
   GenerateType const type = this->GetGenerateType();
 
-  bool const newCMP0022Behavior =
-    target->GetPolicyStatusCMP0022() != cmPolicies::WARN &&
-    target->GetPolicyStatusCMP0022() != cmPolicies::OLD;
-  if (!newCMP0022Behavior) {
-    std::ostringstream w;
-    if (type == BUILD) {
-      w << "export(TARGETS ... ANDROID_MK) called with policy CMP0022";
-    } else {
-      w << "install( EXPORT_ANDROID_MK ...) called with policy CMP0022";
-    }
-    w << " set to OLD for target " << target->Target->GetName() << ". "
-      << "The export will only work with CMP0022 set to NEW.";
-    target->Makefile->IssueMessage(MessageType::AUTHOR_WARNING, w.str());
-  }
   if (!properties.empty()) {
     os << "LOCAL_CPP_FEATURES := rtti exceptions\n";
     for (auto const& property : properties) {
@@ -86,9 +68,9 @@ void cmExportAndroidMKGenerator::GenerateInterfaceProperties(
 
             if (gt->GetType() == cmStateEnums::SHARED_LIBRARY ||
                 gt->GetType() == cmStateEnums::MODULE_LIBRARY) {
-              sharedLibs += " " + lib;
+              sharedLibs = cmStrCat(std::move(sharedLibs), ' ', lib);
             } else {
-              staticLibs += " " + lib;
+              staticLibs = cmStrCat(std::move(staticLibs), ' ', lib);
             }
           } else {
             bool relpath = false;
@@ -100,10 +82,10 @@ void cmExportAndroidMKGenerator::GenerateInterfaceProperties(
             // if it is full or a link library then use string directly
             if (cmSystemTools::FileIsFullPath(lib) ||
                 cmHasLiteralPrefix(lib, "-l") || relpath) {
-              ldlibs += " " + lib;
+              ldlibs = cmStrCat(std::move(ldlibs), ' ', lib);
               // if it is not a path and does not have a -l then add -l
             } else if (!lib.empty()) {
-              ldlibs += " -l" + lib;
+              ldlibs = cmStrCat(std::move(ldlibs), " -l", lib);
             }
           }
         }

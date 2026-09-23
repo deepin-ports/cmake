@@ -24,6 +24,7 @@
 #include <windows.h>
 
 #include "cmsys/Encoding.hxx"
+#include "cmsys/SystemTools.hxx"
 
 #include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
@@ -34,7 +35,7 @@ void _setargv()
 {
 }
 
-static void Fatal(const char* msg, ...)
+static void Fatal(char const* msg, ...)
 {
   va_list ap;
   fprintf(stderr, "ninja: FATAL: ");
@@ -49,7 +50,7 @@ static void Fatal(const char* msg, ...)
   ExitProcess(1);
 }
 
-static void usage(const char* msg)
+static void usage(char const* msg)
 {
   Fatal("%s\n\nusage:\n    "
         "cmcldeps "
@@ -72,8 +73,8 @@ static cm::string_view trimLeadingSpace(cm::string_view cmdline)
   return cmdline.substr(i);
 }
 
-static void replaceAll(std::string& str, const std::string& search,
-                       const std::string& repl)
+static void replaceAll(std::string& str, std::string const& search,
+                       std::string const& repl)
 {
   std::string::size_type pos = 0;
   while ((pos = str.find(search, pos)) != std::string::npos) {
@@ -135,7 +136,7 @@ static void escapePath(std::string& path)
   replaceAll(path, " ", "\\ ");
 }
 
-static void outputDepFile(const std::string& dfile, const std::string& objfile,
+static void outputDepFile(std::string const& dfile, std::string const& objfile,
                           std::vector<std::string>& incs)
 {
 
@@ -151,7 +152,7 @@ static void outputDepFile(const std::string& dfile, const std::string& objfile,
   // FIXME should this be fatal or not? delete obj? delete d?
   if (!out)
     return;
-  std::string cwd = cmSystemTools::GetCurrentWorkingDirectory();
+  std::string cwd = cmsys::SystemTools::GetCurrentWorkingDirectory();
   replaceAll(cwd, "/", "\\");
   cwd += "\\";
 
@@ -176,9 +177,9 @@ static void outputDepFile(const std::string& dfile, const std::string& objfile,
   fclose(out);
 }
 
-static int process(cm::string_view srcfilename, const std::string& dfile,
-                   const std::string& objfile, const std::string& prefix,
-                   const std::string& cmd, const std::string& dir = "",
+static int process(cm::string_view srcfilename, std::string const& dfile,
+                   std::string const& objfile, std::string const& prefix,
+                   std::string const& cmd, std::string const& dir = "",
                    bool quiet = false)
 {
   std::string output;
@@ -264,14 +265,15 @@ int main()
     // The object will not actually be written.
     cmSystemTools::ReplaceString(clrest, "/fo ", " ");
     cmSystemTools::ReplaceString(clrest, "-fo ", " ");
-    cmSystemTools::ReplaceString(clrest, objfile, "-Fo" + objfile + ".obj");
+    cmSystemTools::ReplaceString(clrest, objfile,
+                                 cmStrCat("-Fo", objfile, ".obj"));
 
-    cl = "\"" + cl + "\" /P /DRC_INVOKED /nologo /showIncludes /TC ";
+    cl = cmStrCat('"', cl, "\" /P /DRC_INVOKED /nologo /showIncludes /TC ");
 
     // call cl in object dir so the .i is generated there
     std::string objdir;
     {
-      pos = objfile.rfind("\\");
+      pos = objfile.rfind('\\');
       if (pos != std::string::npos) {
         objdir = objfile.substr(0, pos);
       }
@@ -281,8 +283,9 @@ int main()
     int exit_code =
       process(srcfilename, dfile, objfile, prefix, cl + clrest, objdir, true);
 
-    if (exit_code != 0)
+    if (exit_code != 0) {
       return exit_code;
+    }
 
     // compile rc file with rc.exe
     std::string rc = cmStrCat('"', binpath, '"');

@@ -38,7 +38,12 @@ if(WIN32 AND NOT CYGWIN)
 endif()
 
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "LFortran")
-  add_compile_options("$<$<COMPILE_LANGUAGE:Fortran>:--implicit-interface;--generate-object-code>")
+  if(CMAKE_Fortran_COMPILER_VERSION VERSION_GREATER_EQUAL "0.55")
+    set(_LFORTRAN_SC_FLAG --separate-compilation)
+  else()
+    set(_LFORTRAN_SC_FLAG --generate-object-code)
+  endif()
+  add_compile_options("$<$<COMPILE_LANGUAGE:Fortran>:--implicit-interface;${_LFORTRAN_SC_FLAG}>")
 endif()
 
 add_library(hello STATIC hello.f)
@@ -127,7 +132,7 @@ endfunction()
 # if the id's match or the compilers are compatible, then
 # call the test_fortran_c_interface_module function
 if("${CMAKE_Fortran_COMPILER_ID}:${CMAKE_C_COMPILER_ID}" MATCHES
-    "(Intel(LLVM)?:MSVC|Absoft:GNU|(LLVMFlang|LFortran):(GNU|Clang))"
+    "(Intel(LLVM)?:MSVC|Absoft:GNU|(LLVMFlang|LFortran):(GNU|Clang)|Cray:CrayClang)"
     OR ("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "${CMAKE_C_COMPILER_ID}" ))
   test_fortran_c_interface_module()
 else()

@@ -1,8 +1,9 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmExportInstallCMakeConfigGenerator.h"
 
 #include <algorithm>
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -16,6 +17,7 @@
 #include "cmExportFileGenerator.h"
 #include "cmExportSet.h"
 #include "cmFileSet.h"
+#include "cmGenExContext.h"
 #include "cmGeneratedFileStream.h"
 #include "cmGeneratorExpression.h"
 #include "cmGeneratorTarget.h"
@@ -25,7 +27,6 @@
 #include "cmMakefile.h"
 #include "cmMessageType.h"
 #include "cmOutputConverter.h"
-#include "cmPolicies.h"
 #include "cmStateTypes.h"
 #include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
@@ -83,15 +84,10 @@ bool cmExportInstallCMakeConfigGenerator::GenerateMainFile(std::ostream& os)
       return false;
     }
 
-    bool const newCMP0022Behavior =
-      gt->GetPolicyStatusCMP0022() != cmPolicies::WARN &&
-      gt->GetPolicyStatusCMP0022() != cmPolicies::OLD;
-    if (newCMP0022Behavior) {
-      if (this->PopulateInterfaceLinkLibrariesProperty(
-            gt, cmGeneratorExpression::InstallInterface, properties) &&
-          !this->ExportOld) {
-        this->SetRequiredCMakeVersion(2, 8, 12);
-      }
+    if (this->PopulateInterfaceLinkLibrariesProperty(
+          gt, cmGeneratorExpression::InstallInterface, properties) &&
+        !this->ExportOld) {
+      this->SetRequiredCMakeVersion(2, 8, 12);
     }
     if (targetType == cmStateEnums::INTERFACE_LIBRARY) {
       this->SetRequiredCMakeVersion(3, 0, 0);
@@ -161,11 +157,11 @@ void cmExportInstallCMakeConfigGenerator::GenerateImportPrefix(
   } else {
     // Add code to compute the installation prefix relative to the
     // import file location.
-    std::string absDest = installPrefix + "/" + expDest;
-    std::string absDestS = absDest + "/";
+    std::string absDest = cmStrCat(installPrefix, '/', expDest);
+    std::string absDestS = absDest + '/';
     os << "# Compute the installation prefix relative to this file.\n"
-       << "get_filename_component(_IMPORT_PREFIX"
-       << " \"${CMAKE_CURRENT_LIST_FILE}\" PATH)\n";
+          "get_filename_component(_IMPORT_PREFIX"
+          " \"${CMAKE_CURRENT_LIST_FILE}\" PATH)\n";
     if (cmHasLiteralPrefix(absDestS, "/lib/") ||
         cmHasLiteralPrefix(absDestS, "/lib64/") ||
         cmHasLiteralPrefix(absDestS, "/libx32/") ||
@@ -193,9 +189,9 @@ void cmExportInstallCMakeConfigGenerator::GenerateImportPrefix(
       dest = cmSystemTools::GetFilenamePath(dest);
     }
     os << "if(_IMPORT_PREFIX STREQUAL \"/\")\n"
-       << "  set(_IMPORT_PREFIX \"\")\n"
-       << "endif()\n"
-       << "\n";
+          "  set(_IMPORT_PREFIX \"\")\n"
+          "endif()\n"
+          "\n";
   }
 }
 
@@ -204,8 +200,8 @@ void cmExportInstallCMakeConfigGenerator::CleanupTemporaryVariables(
 {
   /* clang-format off */
   os << "# Cleanup temporary variables.\n"
-     << "set(_IMPORT_PREFIX)\n"
-     << "\n";
+        "set(_IMPORT_PREFIX)\n"
+        "\n";
   /* clang-format on */
 }
 
@@ -214,14 +210,14 @@ void cmExportInstallCMakeConfigGenerator::LoadConfigFiles(std::ostream& os)
   // Now load per-configuration properties for them.
   /* clang-format off */
   os << "# Load information for each installed configuration.\n"
-     << "file(GLOB _cmake_config_files \"${CMAKE_CURRENT_LIST_DIR}/"
-     << this->GetConfigImportFileGlob() << "\")\n"
-     << "foreach(_cmake_config_file IN LISTS _cmake_config_files)\n"
-     << "  include(\"${_cmake_config_file}\")\n"
-     << "endforeach()\n"
-     << "unset(_cmake_config_file)\n"
-     << "unset(_cmake_config_files)\n"
-     << "\n";
+        "file(GLOB _cmake_config_files \"${CMAKE_CURRENT_LIST_DIR}/"
+        << this->GetConfigImportFileGlob() << "\")\n"
+        "foreach(_cmake_config_file IN LISTS _cmake_config_files)\n"
+        "  include(\"${_cmake_config_file}\")\n"
+        "endforeach()\n"
+        "unset(_cmake_config_file)\n"
+        "unset(_cmake_config_files)\n"
+        "\n";
   /* clang-format on */
 }
 
@@ -292,7 +288,8 @@ std::string cmExportInstallCMakeConfigGenerator::GetFileSetDirectories(
     gte->Makefile->GetGeneratorConfigs(cmMakefile::IncludeEmptyConfig);
 
   cmGeneratorExpression ge(*gte->Makefile->GetCMakeInstance());
-  auto cge = ge.Parse(te->FileSetGenerators.at(fileSet)->GetDestination());
+  auto cge =
+    ge.Parse(te->FileSetGenerators.at(fileSet->GetName())->GetDestination());
 
   for (auto const& config : configs) {
     auto unescapedDest = cge->Evaluate(gte->LocalGenerator, config, gte);
@@ -340,17 +337,17 @@ std::string cmExportInstallCMakeConfigGenerator::GetFileSetFiles(
   auto directoryEntries = fileSet->CompileDirectoryEntries();
 
   cmGeneratorExpression destGe(*gte->Makefile->GetCMakeInstance());
-  auto destCge =
-    destGe.Parse(te->FileSetGenerators.at(fileSet)->GetDestination());
+  auto destCge = destGe.Parse(
+    te->FileSetGenerators.at(fileSet->GetName())->GetDestination());
 
   for (auto const& config : configs) {
-    auto directories = fileSet->EvaluateDirectoryEntries(
-      directoryEntries, gte->LocalGenerator, config, gte);
+    cm::GenEx::Context context(gte->LocalGenerator, config);
+    auto directories =
+      fileSet->EvaluateDirectoryEntries(directoryEntries, context, gte);
 
     std::map<std::string, std::vector<std::string>> files;
     for (auto const& entry : fileEntries) {
-      fileSet->EvaluateFileEntry(directories, files, entry,
-                                 gte->LocalGenerator, config, gte);
+      fileSet->EvaluateFileEntry(directories, files, entry, context, gte);
     }
     auto unescapedDest = destCge->Evaluate(gte->LocalGenerator, config, gte);
     auto dest =
@@ -385,7 +382,7 @@ std::string cmExportInstallCMakeConfigGenerator::GetFileSetFiles(
       auto prefix = it.first.empty() ? "" : cmStrCat(it.first, '/');
       for (auto const& filename : it.second) {
         auto relFile =
-          cmStrCat(prefix, cmSystemTools::GetFilenameName(filename));
+          cmStrCat(prefix, cmSystemTools::GetFilenameNameView(filename));
         auto escapedFile =
           cmStrCat(dest,
                    cmOutputConverter::EscapeForCMake(

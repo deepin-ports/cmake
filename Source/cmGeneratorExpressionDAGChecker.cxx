@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmGeneratorExpressionDAGChecker.h"
 
 #include <sstream>
@@ -9,7 +9,8 @@
 #include <cm/string_view>
 #include <cmext/string_view>
 
-#include "cmGeneratorExpressionContext.h"
+#include "cmGenExContext.h"
+#include "cmGenExEvaluation.h"
 #include "cmGeneratorExpressionEvaluator.h"
 #include "cmGeneratorTarget.h"
 #include "cmLocalGenerator.h"
@@ -19,44 +20,32 @@
 
 cmGeneratorExpressionDAGChecker::cmGeneratorExpressionDAGChecker(
   cmGeneratorTarget const* target, std::string property,
-  const GeneratorExpressionContent* content,
-  cmGeneratorExpressionDAGChecker* parent, cmLocalGenerator const* contextLG,
-  std::string const& contextConfig)
-  : cmGeneratorExpressionDAGChecker(cmListFileBacktrace(), target,
-                                    std::move(property), content, parent,
-                                    contextLG, contextConfig)
-{
-}
-
-cmGeneratorExpressionDAGChecker::cmGeneratorExpressionDAGChecker(
-  cmListFileBacktrace backtrace, cmGeneratorTarget const* target,
-  std::string property, const GeneratorExpressionContent* content,
-  cmGeneratorExpressionDAGChecker* parent, cmLocalGenerator const* contextLG,
-  std::string const& contextConfig)
+  GeneratorExpressionContent const* content,
+  cmGeneratorExpressionDAGChecker* parent, cm::GenEx::Context const& context,
+  cmListFileBacktrace backtrace, ComputingLinkLibraries computingLinkLibraries)
   : Parent(parent)
   , Top(parent ? parent->Top : this)
   , Target(target)
   , Property(std::move(property))
   , Content(content)
   , Backtrace(std::move(backtrace))
+  , ComputingLinkLibraries_(computingLinkLibraries)
 {
   if (parent) {
     this->TopIsTransitiveProperty = parent->TopIsTransitiveProperty;
   } else {
     this->TopIsTransitiveProperty =
-      this->Target
-        ->IsTransitiveProperty(this->Property, contextLG, contextConfig,
-                               this->EvaluatingLinkLibraries())
+      this->Target->IsTransitiveProperty(this->Property, context, this)
         .has_value();
   }
 
   this->CheckResult = this->CheckGraph();
 
   if (this->CheckResult == DAG && this->EvaluatingTransitiveProperty()) {
-    const auto* top = this->Top;
+    auto const* top = this->Top;
     auto it = top->Seen.find(this->Target);
     if (it != top->Seen.end()) {
-      const std::set<std::string>& propSet = it->second;
+      std::set<std::string> const& propSet = it->second;
       if (propSet.find(this->Property) != propSet.end()) {
         this->CheckResult = ALREADY_SEEN;
         return;
@@ -72,28 +61,28 @@ cmGeneratorExpressionDAGChecker::Check() const
   return this->CheckResult;
 }
 
-void cmGeneratorExpressionDAGChecker::ReportError(
-  cmGeneratorExpressionContext* context, const std::string& expr)
+void cmGeneratorExpressionDAGChecker::ReportError(cm::GenEx::Evaluation* eval,
+                                                  std::string const& expr)
 {
   if (this->CheckResult == DAG) {
     return;
   }
 
-  context->HadError = true;
-  if (context->Quiet) {
+  eval->HadError = true;
+  if (eval->Quiet) {
     return;
   }
 
-  const cmGeneratorExpressionDAGChecker* parent = this->Parent;
+  cmGeneratorExpressionDAGChecker const* parent = this->Parent;
 
   if (parent && !parent->Parent) {
     std::ostringstream e;
     e << "Error evaluating generator expression:\n"
       << "  " << expr << "\n"
-      << "Self reference on target \"" << context->HeadTarget->GetName()
+      << "Self reference on target \"" << eval->HeadTarget->GetName()
       << "\".\n";
-    context->LG->GetCMakeInstance()->IssueMessage(MessageType::FATAL_ERROR,
-                                                  e.str(), parent->Backtrace);
+    eval->Context.LG->GetCMakeInstance()->IssueMessage(
+      MessageType::FATAL_ERROR, e.str(), parent->Backtrace);
     return;
   }
 
@@ -104,8 +93,8 @@ void cmGeneratorExpressionDAGChecker::ReportError(
     << "  " << expr << "\n"
     << "Dependency loop found.";
     /* clang-format on */
-    context->LG->GetCMakeInstance()->IssueMessage(MessageType::FATAL_ERROR,
-                                                  e.str(), context->Backtrace);
+    eval->Context.LG->GetCMakeInstance()->IssueMessage(
+      MessageType::FATAL_ERROR, e.str(), eval->Backtrace);
   }
 
   int loopStep = 1;
@@ -115,8 +104,8 @@ void cmGeneratorExpressionDAGChecker::ReportError(
       << "  "
       << (parent->Content ? parent->Content->GetOriginalExpression() : expr)
       << "\n";
-    context->LG->GetCMakeInstance()->IssueMessage(MessageType::FATAL_ERROR,
-                                                  e.str(), parent->Backtrace);
+    eval->Context.LG->GetCMakeInstance()->IssueMessage(
+      MessageType::FATAL_ERROR, e.str(), parent->Backtrace);
     parent = parent->Parent;
     ++loopStep;
   }
@@ -125,7 +114,7 @@ void cmGeneratorExpressionDAGChecker::ReportError(
 cmGeneratorExpressionDAGChecker::Result
 cmGeneratorExpressionDAGChecker::CheckGraph() const
 {
-  const cmGeneratorExpressionDAGChecker* parent = this->Parent;
+  cmGeneratorExpressionDAGChecker const* parent = this->Parent;
   while (parent) {
     if (this->Target == parent->Target && this->Property == parent->Property) {
       return (parent == this->Parent) ? SELF_REFERENCE : CYCLIC_REFERENCE;
@@ -204,10 +193,15 @@ bool cmGeneratorExpressionDAGChecker::EvaluatingLinkerLauncher() const
     "_LINKER_LAUNCHER"_s;
 }
 
+bool cmGeneratorExpressionDAGChecker::IsComputingLinkLibraries() const
+{
+  return this->Top->ComputingLinkLibraries_ == ComputingLinkLibraries::Yes;
+}
+
 bool cmGeneratorExpressionDAGChecker::EvaluatingLinkLibraries(
   cmGeneratorTarget const* tgt, ForGenex genex) const
 {
-  const auto* top = this->Top;
+  auto const* top = this->Top;
 
   cm::string_view prop(top->Property);
 

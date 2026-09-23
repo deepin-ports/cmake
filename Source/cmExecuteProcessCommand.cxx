@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmExecuteProcessCommand.h"
 
 #include <cstdint>
@@ -24,6 +24,8 @@
 #  include "cm_fileno.hxx"
 #endif
 
+#include "cmsys/String.h"
+
 #include "cmArgumentParser.h"
 #include "cmExecutionStatus.h"
 #include "cmList.h"
@@ -40,10 +42,10 @@
 namespace {
 bool cmExecuteProcessCommandIsWhitespace(char c)
 {
-  return (cmIsSpace(c) || c == '\n' || c == '\r');
+  return (cmsysString_isspace(c) || c == '\n' || c == '\r');
 }
 
-FILE* FopenCLOEXEC(std::string const& path, const char* mode)
+FILE* FopenCLOEXEC(std::string const& path, char const* mode)
 {
   FILE* f = cmsys::SystemTools::Fopen(path, mode);
 #ifndef _WIN32
@@ -59,7 +61,7 @@ FILE* FopenCLOEXEC(std::string const& path, const char* mode)
 
 void cmExecuteProcessCommandFixText(std::vector<char>& output,
                                     bool strip_trailing_whitespace);
-void cmExecuteProcessCommandAppend(std::vector<char>& output, const char* data,
+void cmExecuteProcessCommandAppend(std::vector<char>& output, char const* data,
                                    std::size_t length);
 }
 
@@ -120,7 +122,7 @@ bool cmExecuteProcessCommand(std::vector<std::string> const& args,
       .Bind("COMMAND_ERROR_IS_FATAL"_s, &Arguments::CommandErrorIsFatal);
 
   std::vector<std::string> unparsedArguments;
-  Arguments const arguments = parser.Parse(args, &unparsedArguments);
+  Arguments arguments = parser.Parse(args, &unparsedArguments);
 
   if (arguments.MaybeReportError(status.GetMakefile())) {
     return true;
@@ -161,11 +163,12 @@ bool cmExecuteProcessCommand(std::vector<std::string> const& args,
     status.SetError(" called with no COMMAND argument.");
     return false;
   }
-  for (std::vector<std::string> const& cmd : arguments.Commands) {
+  for (std::vector<std::string>& cmd : arguments.Commands) {
     if (cmd.empty()) {
       status.SetError(" given COMMAND argument with no value.");
       return false;
     }
+    cmSystemTools::MaybePrependCmdExe(cmd);
   }
 
   // Parse the timeout string.
@@ -177,12 +180,25 @@ bool cmExecuteProcessCommand(std::vector<std::string> const& args,
     }
   }
 
-  if (!arguments.CommandErrorIsFatal.empty()) {
-    if (arguments.CommandErrorIsFatal != "ANY"_s &&
-        arguments.CommandErrorIsFatal != "LAST"_s) {
-      status.SetError("COMMAND_ERROR_IS_FATAL option can be ANY or LAST");
+  std::string commandErrorIsFatal = arguments.CommandErrorIsFatal;
+  if (commandErrorIsFatal.empty() && arguments.ResultVariable.empty() &&
+      arguments.ResultsVariable.empty()) {
+    commandErrorIsFatal = status.GetMakefile().GetSafeDefinition(
+      "CMAKE_EXECUTE_PROCESS_COMMAND_ERROR_IS_FATAL");
+  }
+
+  if (!commandErrorIsFatal.empty() && commandErrorIsFatal != "ANY"_s &&
+      commandErrorIsFatal != "LAST"_s && commandErrorIsFatal != "NONE"_s) {
+    if (!arguments.CommandErrorIsFatal.empty()) {
+      status.SetError(
+        "COMMAND_ERROR_IS_FATAL option can be ANY, LAST or NONE");
       return false;
     }
+    status.SetError(cmStrCat(
+      "Using CMAKE_EXECUTE_PROCESS_COMMAND_ERROR_IS_FATAL with invalid value "
+      "\"",
+      commandErrorIsFatal, "\". This variable can be ANY, LAST or NONE"));
+    return false;
   }
   // Create a process instance.
   cmUVProcessChainBuilder builder;
@@ -281,7 +297,7 @@ bool cmExecuteProcessCommand(std::vector<std::string> const& args,
   }
   if (echo_stdout || echo_stderr) {
     std::string command;
-    for (const auto& cmd : arguments.Commands) {
+    for (auto const& cmd : arguments.Commands) {
       command += "'";
       command += cmJoin(cmd, "' '");
       command += "'";
@@ -306,18 +322,20 @@ bool cmExecuteProcessCommand(std::vector<std::string> const& args,
         auto* timeoutPtr = static_cast<bool*>(handle->data);
         *timeoutPtr = true;
       },
-      timeoutMillis, 0);
+      timeoutMillis, 0, cm::uv_update_time::yes);
   }
 
   // Read the process output.
   struct ReadData
   {
+    uv_stream_t* Stream = nullptr;
     bool Finished = false;
     std::vector<char> Output;
-    cm::uv_pipe_ptr Stream;
   };
   ReadData outputData;
   ReadData errorData;
+  outputData.Stream = chain.OutputStream();
+  errorData.Stream = chain.ErrorStream();
   cmPolicies::PolicyStatus const cmp0176 =
     status.GetMakefile().GetPolicyStatus(cmPolicies::CMP0176);
   cmProcessOutput::Encoding encoding =
@@ -339,9 +357,7 @@ bool cmExecuteProcessCommand(std::vector<std::string> const& args,
   std::string strdata;
 
   std::unique_ptr<cmUVStreamReadHandle> outputHandle;
-  if (chain.OutputStream() >= 0) {
-    outputData.Stream.init(chain.GetLoop(), 0);
-    uv_pipe_open(outputData.Stream, chain.OutputStream());
+  if (outputData.Stream) {
     outputHandle = cmUVStreamRead(
       outputData.Stream,
       [&arguments, &processOutput, &outputData,
@@ -363,10 +379,7 @@ bool cmExecuteProcessCommand(std::vector<std::string> const& args,
     outputData.Finished = true;
   }
   std::unique_ptr<cmUVStreamReadHandle> errorHandle;
-  if (chain.ErrorStream() >= 0 &&
-      chain.ErrorStream() != chain.OutputStream()) {
-    errorData.Stream.init(chain.GetLoop(), 0);
-    uv_pipe_open(errorData.Stream, chain.ErrorStream());
+  if (errorData.Stream) {
     errorHandle = cmUVStreamRead(
       errorData.Stream,
       [&arguments, &processOutput, &errorData,
@@ -390,6 +403,9 @@ bool cmExecuteProcessCommand(std::vector<std::string> const& args,
   while (chain.Valid() && !timedOut &&
          !(chain.Finished() && outputData.Finished && errorData.Finished)) {
     uv_run(&chain.GetLoop(), UV_RUN_ONCE);
+  }
+  if (timedOut) {
+    chain.Terminate();
   }
   if (!arguments.OutputQuiet &&
       (arguments.OutputVariable.empty() || arguments.EchoOutputVariable)) {
@@ -479,7 +495,7 @@ bool cmExecuteProcessCommand(std::vector<std::string> const& args,
                     exception.second);
   };
 
-  if (arguments.CommandErrorIsFatal == "ANY"_s) {
+  if (commandErrorIsFatal == "ANY"_s) {
     bool ret = true;
     if (timedOut) {
       status.SetError("Process terminated due to timeout");
@@ -510,7 +526,7 @@ bool cmExecuteProcessCommand(std::vector<std::string> const& args,
     }
   }
 
-  if (arguments.CommandErrorIsFatal == "LAST"_s) {
+  if (commandErrorIsFatal == "LAST"_s) {
     bool ret = true;
     if (timedOut) {
       status.SetError("Process terminated due to timeout");
@@ -523,7 +539,7 @@ bool cmExecuteProcessCommand(std::vector<std::string> const& args,
         ret = false;
       } else {
         int lastIndex = static_cast<int>(arguments.Commands.size() - 1);
-        const std::string processStatus = queryProcessStatusByIndex(lastIndex);
+        std::string const processStatus = queryProcessStatusByIndex(lastIndex);
         if (!processStatus.empty()) {
           status.SetError("last command failed");
           ret = false;
@@ -570,7 +586,7 @@ void cmExecuteProcessCommandFixText(std::vector<char>& output,
   output.push_back('\0');
 }
 
-void cmExecuteProcessCommandAppend(std::vector<char>& output, const char* data,
+void cmExecuteProcessCommandAppend(std::vector<char>& output, char const* data,
                                    std::size_t length)
 {
 #if defined(__APPLE__)

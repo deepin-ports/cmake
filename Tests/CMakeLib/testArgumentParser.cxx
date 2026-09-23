@@ -1,7 +1,8 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 
 #include <map>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -16,9 +17,17 @@
 #include "testCommon.h"
 
 namespace {
-
-struct Result : public ArgumentParser::ParseResult
+struct Result : ArgumentParser::ParseResult
 {
+  struct SubResult : ParseResult
+  {
+    ArgumentParser::NonEmpty<std::string> SubCommand;
+    bool SubOption = false;
+    ArgumentParser::NonEmpty<std::string> SubString;
+    ArgumentParser::NonEmpty<std::vector<std::string>> SubList;
+    std::vector<cm::string_view> ParsedKeywords;
+  };
+
   bool Option1 = false;
   bool Option2 = false;
 
@@ -44,6 +53,7 @@ struct Result : public ArgumentParser::ParseResult
   cm::optional<std::string> Pos0;
   cm::optional<std::string> Pos1;
   cm::optional<std::string> Pos2;
+  ArgumentParser::MaybeEmpty<std::vector<std::string>> TrailingPos;
 
   bool Func0_ = false;
   ArgumentParser::Continue Func0(cm::string_view)
@@ -81,6 +91,9 @@ struct Result : public ArgumentParser::ParseResult
     return key == "FUNC_4b" ? ArgumentParser::Continue::Yes
                             : ArgumentParser::Continue::No;
   }
+
+  cm::optional<SubResult> Sub;
+  ArgumentParser::NonEmpty<std::string> Parent;
 
   ArgumentParser::Maybe<std::string> UnboundMaybe{ 'u', 'n', 'b', 'o',
                                                    'u', 'n', 'd' };
@@ -130,6 +143,36 @@ std::initializer_list<cm::string_view> const args = {
   "FUNC_3", "foo", "bar",    // callback with list arg ...
   "FUNC_4a", "foo", "ign4",  // callback with keyword-dependent arg count
   "FUNC_4b", "bar", "zot",   // callback with keyword-dependent arg count
+  "SUB_CMD",  "foo",         // switch to subparser and set Sub::SUB_CMD to foo
+  "SUB_OPTION",              // subparser option
+  "SUB_STRING", "sub_value", // subparser string
+  "SUB_LIST", "a", "b", "c", // subparser list
+  // Return to main parser (simulate another main option if needed)
+  "PARENT", "value",
+};
+
+struct ResultTrailingPos : public ArgumentParser::ParseResult
+{
+  bool Option1 = false;
+  ArgumentParser::NonEmpty<std::vector<std::string>> List1;
+
+  cm::optional<std::string> Pos0;
+  cm::optional<std::string> Pos1;
+  ArgumentParser::NonEmpty<std::vector<std::string>> TrailingPos;
+};
+
+struct DerivedTrailingPos : ResultTrailingPos
+{
+};
+
+std::initializer_list<cm::string_view> const args_trailingpos = {
+  /* clang-format off */
+  "pos0",                    // position index 0
+  "pos1",                    // position index 1
+  "pos_trailing0",           // trailing positional 0
+  "pos_trailing1",           // trailing positional 1
+  "OPTION_1",                // option
+  "LIST_1", "foo", "bar",    // list arg with 2 elems
   /* clang-format on */
 };
 
@@ -163,8 +206,15 @@ bool verifyResult(Result const& result,
     "FUNC_3",
     "FUNC_4a",
     "FUNC_4b",
+    "SUB_CMD",
+    "PARENT",
     /* clang-format on */
   };
+
+  static std::vector<cm::string_view> subParsedKeywords = {
+    "SUB_CMD", "SUB_OPTION", "SUB_STRING", "SUB_LIST"
+  };
+
   static std::map<std::string, std::vector<std::string>> const func2map = {
     { "FUNC_2a", { "foo" } }, { "FUNC_2b", { "bar", "zot" } }
   };
@@ -216,6 +266,7 @@ bool verifyResult(Result const& result,
   ASSERT_TRUE(result.Pos0 == "pos0");
   ASSERT_TRUE(!result.Pos1);
   ASSERT_TRUE(!result.Pos2);
+  ASSERT_TRUE(result.TrailingPos.empty());
 
   ASSERT_TRUE(result.Func0_ == false);
   ASSERT_TRUE(result.Func1_ == "foo");
@@ -230,14 +281,43 @@ bool verifyResult(Result const& result,
   ASSERT_TRUE(result.UnboundNonEmpty == unbound);
   ASSERT_TRUE(result.UnboundNonEmptyStr == "unbound");
 
+  ASSERT_TRUE(result.Sub->SubCommand == "foo");
+  ASSERT_TRUE(result.Sub->SubOption);
+  ASSERT_TRUE(result.Sub->SubString == "sub_value");
+  ASSERT_TRUE(result.Sub->SubList ==
+              std::vector<std::string>({ "a", "b", "c" }));
+  ASSERT_TRUE(result.Parent == "value");
+
+  ASSERT_TRUE(result.Sub->ParsedKeywords == subParsedKeywords);
   ASSERT_TRUE(result.ParsedKeywords == parsedKeywords);
 
   ASSERT_TRUE(result.GetKeywordErrors().size() == keywordErrors.size());
   for (auto const& ke : result.GetKeywordErrors()) {
     auto const ki = keywordErrors.find(ke.first);
     ASSERT_TRUE(ki != keywordErrors.end());
-    ASSERT_TRUE(ke.second == ki->second);
+    ASSERT_TRUE(ke.second.size() == 1);
+    ASSERT_TRUE(*ke.second.begin() == ki->second);
   }
+
+  return true;
+}
+
+bool verifyResult(ResultTrailingPos const& result,
+                  std::vector<std::string> const& unparsedArguments)
+{
+  static std::vector<std::string> const foobar = { "foo", "bar" };
+  static std::vector<std::string> const trailing = { "pos_trailing0",
+                                                     "pos_trailing1" };
+
+  ASSERT_TRUE(result);
+  ASSERT_TRUE(unparsedArguments.empty());
+
+  ASSERT_TRUE(result.Option1);
+  ASSERT_TRUE(result.List1 == foobar);
+
+  ASSERT_TRUE(result.Pos0 == "pos0");
+  ASSERT_TRUE(result.Pos1 == "pos1");
+  ASSERT_TRUE(result.TrailingPos == trailing);
 
   return true;
 }
@@ -245,6 +325,8 @@ bool verifyResult(Result const& result,
 bool testArgumentParserDynamic()
 {
   Result result;
+  result.Sub = Result::SubResult();
+
   std::vector<std::string> unparsedArguments;
 
   std::function<ArgumentParser::Continue(cm::string_view, cm::string_view)>
@@ -253,11 +335,24 @@ bool testArgumentParserDynamic()
     return result.Func4(key, arg);
   };
 
+  cmArgumentParser<void> parserDynamic;
+  parserDynamic.Bind("OPTION_1"_s, result.Option1);
+  ASSERT_TRUE(parserDynamic.HasKeyword("OPTION_1"_s));
+  ASSERT_TRUE(!parserDynamic.HasKeyword("NOT_AN_OPTION"_s));
+
+  auto subParser = cmArgumentParser<void>{}
+                     .Bind("SUB_CMD"_s, result.Sub->SubCommand)
+                     .Bind("SUB_OPTION"_s, result.Sub->SubOption)
+                     .Bind("SUB_STRING"_s, result.Sub->SubString)
+                     .Bind("SUB_LIST"_s, result.Sub->SubList)
+                     .BindParsedKeywords(result.Sub->ParsedKeywords);
+
   static_cast<ArgumentParser::ParseResult&>(result) =
     cmArgumentParser<void>{}
       .Bind(0, result.Pos0)
       .Bind(1, result.Pos1)
       .Bind(2, result.Pos2)
+      .BindTrailingArgs(result.TrailingPos)
       .Bind("OPTION_1"_s, result.Option1)
       .Bind("OPTION_2"_s, result.Option2)
       .Bind("STRING_1"_s, result.String1)
@@ -296,10 +391,28 @@ bool testArgumentParserDynamic()
             })
       .Bind("FUNC_4a"_s, func4)
       .Bind("FUNC_4b"_s, func4)
+      .BindSubParser("SUB_CMD"_s, subParser, result.Sub)
+      .Bind("PARENT"_s, result.Parent)
       .BindParsedKeywords(result.ParsedKeywords)
       .Parse(args, &unparsedArguments);
 
-  return verifyResult(result, unparsedArguments);
+  if (!verifyResult(result, unparsedArguments)) {
+    return false;
+  }
+
+  unparsedArguments.clear();
+
+  ResultTrailingPos result_trailing;
+  static_cast<ArgumentParser::ParseResult&>(result_trailing) =
+    cmArgumentParser<void>{}
+      .Bind(0, result_trailing.Pos0)
+      .Bind(1, result_trailing.Pos1)
+      .BindTrailingArgs(result_trailing.TrailingPos)
+      .Bind("OPTION_1"_s, result_trailing.Option1)
+      .Bind("LIST_1"_s, result_trailing.List1)
+      .Parse(args_trailingpos, &unparsedArguments);
+
+  return verifyResult(result_trailing, unparsedArguments);
 }
 
 static auto const parserStaticFunc4 =
@@ -309,11 +422,22 @@ static auto const parserStaticFunc4 =
 };
 
 #define BIND_ALL(name, resultType)                                            \
-  static auto const name =                                                    \
+  /* Define the sub-parser first */                                           \
+  static auto sub##name =                                                     \
+    cmArgumentParser<resultType::SubResult>{}                                 \
+      .Bind("SUB_CMD"_s, &resultType::SubResult::SubCommand)                  \
+      .Bind("SUB_OPTION"_s, &resultType::SubResult::SubOption)                \
+      .Bind("SUB_STRING"_s, &resultType::SubResult::SubString)                \
+      .Bind("SUB_LIST"_s, &resultType::SubResult::SubList)                    \
+      .BindParsedKeywords(&resultType::SubResult::ParsedKeywords);            \
+                                                                              \
+  /* Define the main parser, which uses the sub-parser */                     \
+  static const auto name =                                                    \
     cmArgumentParser<resultType>{}                                            \
       .Bind(0, &resultType::Pos0)                                             \
       .Bind(1, &resultType::Pos1)                                             \
       .Bind(2, &resultType::Pos2)                                             \
+      .BindTrailingArgs(&resultType::TrailingPos)                             \
       .Bind("OPTION_1"_s, &resultType::Option1)                               \
       .Bind("OPTION_2"_s, &resultType::Option2)                               \
       .Bind("STRING_1"_s, &resultType::String1)                               \
@@ -341,23 +465,56 @@ static auto const parserStaticFunc4 =
               -> ArgumentParser::Continue { return result.Func3(arg); })      \
       .Bind("FUNC_4a"_s, parserStaticFunc4)                                   \
       .Bind("FUNC_4b"_s, parserStaticFunc4)                                   \
-      .BindParsedKeywords(&resultType::ParsedKeywords)
+      .BindSubParser("SUB_CMD"_s, sub##name, &resultType::Sub)                \
+      .Bind("PARENT"_s, &resultType::Parent)                                  \
+      .BindParsedKeywords(&resultType::ParsedKeywords);
 
 BIND_ALL(parserStatic, Result);
 BIND_ALL(parserDerivedStatic, Derived);
 
+#define BIND_TRAILING(name, resultType)                                       \
+  static auto const name = cmArgumentParser<resultType>{}                     \
+                             .Bind(0, &resultType::Pos0)                      \
+                             .Bind(1, &resultType::Pos1)                      \
+                             .BindTrailingArgs(&resultType::TrailingPos)      \
+                             .Bind("OPTION_1"_s, &resultType::Option1)        \
+                             .Bind("LIST_1"_s, &resultType::List1)
+
+BIND_TRAILING(parserTrailingStatic, ResultTrailingPos);
+BIND_TRAILING(parserTrailingDerivedStatic, DerivedTrailingPos);
+
 bool testArgumentParserStatic()
 {
+  ASSERT_TRUE(parserStatic.HasKeyword("OPTION_1"_s));
+  ASSERT_TRUE(!parserStatic.HasKeyword("NOT_AN_OPTION"_s));
+
   std::vector<std::string> unparsedArguments;
   Result const result = parserStatic.Parse(args, &unparsedArguments);
-  return verifyResult(result, unparsedArguments);
+  if (!verifyResult(result, unparsedArguments)) {
+    return false;
+  }
+
+  unparsedArguments.clear();
+  ResultTrailingPos const result_trailing =
+    parserTrailingStatic.Parse(args_trailingpos, &unparsedArguments);
+  return verifyResult(result_trailing, unparsedArguments);
 }
 
 bool testArgumentParserDerivedStatic()
 {
+  ASSERT_TRUE(parserDerivedStatic.HasKeyword("OPTION_1"_s));
+  ASSERT_TRUE(!parserDerivedStatic.HasKeyword("NOT_AN_OPTION"_s));
+
   std::vector<std::string> unparsedArguments;
   Derived const result = parserDerivedStatic.Parse(args, &unparsedArguments);
-  return verifyResult(result, unparsedArguments);
+  if (!verifyResult(result, unparsedArguments)) {
+    return false;
+  }
+
+  unparsedArguments.clear();
+  ResultTrailingPos const result_trailing =
+    parserTrailingDerivedStatic.Parse(args_trailingpos, &unparsedArguments);
+  return verifyResult(result_trailing, unparsedArguments);
 }
 
 bool testArgumentParserStaticBool()
@@ -368,7 +525,25 @@ bool testArgumentParserStaticBool()
   return verifyResult(result, unparsedArguments);
 }
 
-} // namespace
+bool testArgumentParserTypes()
+{
+  ArgumentParser::Maybe<std::string> maybeString;
+  maybeString = std::string();
+  maybeString = "";
+
+  ArgumentParser::MaybeEmpty<std::vector<std::string>> maybeEmptyVecStr;
+  maybeEmptyVecStr = std::vector<std::string>{};
+
+  ArgumentParser::NonEmpty<std::string> nonEmptyString;
+  nonEmptyString = std::string("x");
+  nonEmptyString = "x";
+
+  ArgumentParser::NonEmpty<std::vector<std::string>> nonEmptyVecStr;
+  nonEmptyVecStr = std::vector<std::string>{ "" };
+  return true;
+}
+
+}
 
 int testArgumentParser(int /*unused*/, char* /*unused*/[])
 {
@@ -389,6 +564,11 @@ int testArgumentParser(int /*unused*/, char* /*unused*/[])
 
   if (!testArgumentParserStaticBool()) {
     std::cout << "While executing testArgumentParserStaticBool().\n";
+    return -1;
+  }
+
+  if (!testArgumentParserTypes()) {
+    std::cout << "While executing testArgumentParserTypes().\n";
     return -1;
   }
 

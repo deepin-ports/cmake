@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmGccDepfileLexerHelper.h"
 
 #include <algorithm>
@@ -12,12 +12,11 @@
 #include "LexerParser/cmGccDepfileLexer.h"
 
 #ifdef _WIN32
-#  include <cctype>
-
 #  include "cmsys/Encoding.h"
+#  include "cmsys/String.h"
 #endif
 
-bool cmGccDepfileLexerHelper::readFile(const char* filePath)
+bool cmGccDepfileLexerHelper::readFile(char const* filePath)
 {
 #ifdef _WIN32
   wchar_t* wpath = cmsysEncoding_DupToWide(filePath);
@@ -84,7 +83,7 @@ void cmGccDepfileLexerHelper::newRuleOrDependency()
   }
 }
 
-void cmGccDepfileLexerHelper::addToCurrentPath(const char* s)
+void cmGccDepfileLexerHelper::addToCurrentPath(char const* s)
 {
   if (this->Content.empty()) {
     return;
@@ -127,10 +126,12 @@ void cmGccDepfileLexerHelper::sanitizeContent()
         // Unescape the colon following the drive letter.
         // Some versions of GNU compilers can escape this character.
         // c\:\path must be transformed to c:\path
-        if (pit->size() >= 3 && std::toupper((*pit)[0]) >= 'A' &&
-            std::toupper((*pit)[0]) <= 'Z' && (*pit)[1] == '\\' &&
-            (*pit)[2] == ':') {
-          pit->erase(1, 1);
+        if (pit->size() >= 3) {
+          auto pit0 = static_cast<char>(cmsysString_toupper((*pit)[0]));
+          if (pit0 >= 'A' && pit0 <= 'Z' && (*pit)[1] == '\\' &&
+              (*pit)[2] == ':') {
+            pit->erase(1, 1);
+          }
         }
 #endif
         ++pit;

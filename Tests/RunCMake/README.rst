@@ -152,7 +152,7 @@ customized by setting the following variables before a call.
 
 ``RunCMake_GENERATOR``
   CMake generator to use when configuring projects.
-  This provided to ``RunCMakeTest.cmake`` scripts automatically
+  This is provided to ``RunCMakeTest.cmake`` scripts automatically
   when they are executed, based on the CMake generator used to
   configure the test suite.
 
@@ -170,18 +170,18 @@ customized by setting the following variables before a call.
 ``RunCMake_GENERATOR_IS_MULTI_CONFIG``
   Boolean value indicating whether ``${RunCMake_GENERATOR}`` is a
   multi-config generator.
-  This provided to ``RunCMakeTest.cmake`` scripts automatically
+  This is provided to ``RunCMakeTest.cmake`` scripts automatically
   when they are executed, based on the CMake generator used to
   configure the test suite.
 
 ``RunCMake_SOURCE_DIR``
   Absolute path to the ``Tests/RunCMake/<Test>`` directory in
-  the CMake source tree.  This provided to ``RunCMakeTest.cmake``
+  the CMake source tree.  This is provided to ``RunCMakeTest.cmake``
   scripts automatically when they are executed.
 
 ``RunCMake_BINARY_DIR``
   Absolute path to the ``Tests/RunCMake/<Test>`` directory in
-  the CMake binary tree.  This provided to ``RunCMakeTest.cmake``
+  the CMake binary tree.  This is provided to ``RunCMakeTest.cmake``
   scripts automatically when they are executed.
 
 ``RunCMake_TEST_SOURCE_DIR``
@@ -274,3 +274,11 @@ script that will automatically perform steps 1 through 4 for you::
   cmake -DRunCMake_TEST_SUITE=<test suite name> -P Tests/RunCMake/AddRunCMakeTestSuite.cmake
 
 Be sure to run this from the top-level CMake source directory.
+
+Crafting Expected Output
+========================
+
+There is a `regex debugging`_ tool available to help craft regular expressions
+to verify output from tests. See its documentation for more.
+
+.. _`regex debugging`: ../../Utilities/cmredbg/README.rst

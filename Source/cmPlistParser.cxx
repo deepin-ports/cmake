@@ -1,6 +1,8 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmPlistParser.h"
+
+#include <vector>
 
 #include <cm3p/json/reader.h>
 #include <cm3p/json/value.h>
@@ -8,7 +10,7 @@
 #include "cmUVProcessChain.h"
 #include "cmUVStream.h"
 
-cm::optional<Json::Value> cmParsePlist(const std::string& filename)
+cm::optional<Json::Value> cmParsePlist(std::string const& filename)
 {
   cmUVProcessChainBuilder builder;
   builder.AddCommand(
@@ -25,7 +27,7 @@ cm::optional<Json::Value> cmParsePlist(const std::string& filename)
 
   Json::Reader reader;
   Json::Value value;
-  cmUVPipeIStream outputStream(chain.GetLoop(), chain.OutputStream());
+  cmUVIStream outputStream(chain.OutputStream());
   if (!reader.parse(outputStream, value)) {
     return cm::nullopt;
   }

@@ -1,15 +1,18 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmGraphVizWriter.h"
 
 #include <algorithm>
-#include <cctype>
 #include <iostream>
 #include <memory>
 #include <set>
+#include <unordered_set>
 #include <utility>
 
 #include <cm/memory>
+
+#include "cmsys/RegularExpression.hxx"
+#include "cmsys/String.h"
 
 #include "cmGeneratedFileStream.h"
 #include "cmGeneratorTarget.h"
@@ -44,7 +47,7 @@ char const* const GRAPHVIZ_NODE_SHAPE_LIBRARY_UNKNOWN = "septagon";
 
 char const* const GRAPHVIZ_NODE_SHAPE_UTILITY = "box";
 
-const char* getShapeForTarget(const cmLinkItem& item)
+char const* getShapeForTarget(cmLinkItem const& item)
 {
   if (!item.Target) {
     return GRAPHVIZ_NODE_SHAPE_LIBRARY_UNKNOWN;
@@ -74,13 +77,13 @@ const char* getShapeForTarget(const cmLinkItem& item)
 struct DependeesDir
 {
   template <typename T>
-  static const cmLinkItem& src(const T& con)
+  static cmLinkItem const& src(T const& con)
   {
     return con.src;
   }
 
   template <typename T>
-  static const cmLinkItem& dst(const T& con)
+  static cmLinkItem const& dst(T const& con)
   {
     return con.dst;
   }
@@ -89,13 +92,13 @@ struct DependeesDir
 struct DependersDir
 {
   template <typename T>
-  static const cmLinkItem& src(const T& con)
+  static cmLinkItem const& src(T const& con)
   {
     return con.dst;
   }
 
   template <typename T>
-  static const cmLinkItem& dst(const T& con)
+  static cmLinkItem const& dst(T const& con)
   {
     return con.src;
   }
@@ -103,7 +106,7 @@ struct DependersDir
 }
 
 cmGraphVizWriter::cmGraphVizWriter(std::string const& fileName,
-                                   const cmGlobalGenerator* globalGenerator)
+                                   cmGlobalGenerator const* globalGenerator)
   : FileName(fileName)
   , GlobalFileStream(fileName)
   , GraphName(globalGenerator->GetSafeGlobalSetting("CMAKE_PROJECT_NAME"))
@@ -192,12 +195,10 @@ void cmGraphVizWriter::VisitLink(cmLinkItem const& depender,
 }
 
 void cmGraphVizWriter::ReadSettings(
-  const std::string& settingsFileName,
-  const std::string& fallbackSettingsFileName)
+  std::string const& settingsFileName,
+  std::string const& fallbackSettingsFileName)
 {
-  cmake cm(cmake::RoleScript, cmState::Unknown);
-  cm.SetHomeDirectory("");
-  cm.SetHomeOutputDirectory("");
+  cmake cm(cmState::Role::Script);
   cm.GetCurrentSnapshot().SetDefaultDefinitions();
   cmGlobalGenerator ggi(&cm);
   cmMakefile mf(&ggi, cm.GetCurrentSnapshot());
@@ -270,7 +271,7 @@ void cmGraphVizWriter::ReadSettings(
 
 void cmGraphVizWriter::Write()
 {
-  const auto* gg = this->GlobalGenerator;
+  auto const* gg = this->GlobalGenerator;
 
   this->VisitGraph(gg->GetName());
 
@@ -279,8 +280,8 @@ void cmGraphVizWriter::Write()
   std::set<cmGeneratorTarget const*, cmGeneratorTarget::StrictTargetComparison>
     sortedGeneratorTargets;
 
-  for (const auto& lg : gg->GetLocalGenerators()) {
-    for (const auto& gt : lg->GetGeneratorTargets()) {
+  for (auto const& lg : gg->GetLocalGenerators()) {
+    for (auto const& gt : lg->GetGeneratorTargets()) {
       // Reserved targets have inconsistent names across platforms (e.g. 'all'
       // vs. 'ALL_BUILD'), which can disrupt the traversal ordering.
       // We don't need or want them anyway.
@@ -292,7 +293,7 @@ void cmGraphVizWriter::Write()
   }
 
   // write global data and collect all connection data for per target graphs
-  for (const auto* const gt : sortedGeneratorTargets) {
+  for (auto const* const gt : sortedGeneratorTargets) {
     auto item = cmLinkItem(gt, false, gt->GetBacktrace());
     this->VisitItem(item);
   }
@@ -307,8 +308,8 @@ void cmGraphVizWriter::Write()
   }
 }
 
-void cmGraphVizWriter::FindAllConnections(const ConnectionsMap& connectionMap,
-                                          const cmLinkItem& rootItem,
+void cmGraphVizWriter::FindAllConnections(ConnectionsMap const& connectionMap,
+                                          cmLinkItem const& rootItem,
                                           Connections& extendedCons,
                                           std::set<cmLinkItem>& visitedItems)
 {
@@ -319,11 +320,11 @@ void cmGraphVizWriter::FindAllConnections(const ConnectionsMap& connectionMap,
     return;
   }
 
-  const Connections& origCons = connectionMap.at(rootItem);
+  Connections const& origCons = connectionMap.at(rootItem);
 
-  for (const Connection& con : origCons) {
+  for (Connection const& con : origCons) {
     extendedCons.emplace_back(con);
-    const cmLinkItem& dstItem = con.dst;
+    cmLinkItem const& dstItem = con.dst;
     bool const visited = visitedItems.find(dstItem) != visitedItems.cend();
     if (!visited) {
       visitedItems.insert(dstItem);
@@ -333,8 +334,8 @@ void cmGraphVizWriter::FindAllConnections(const ConnectionsMap& connectionMap,
   }
 }
 
-void cmGraphVizWriter::FindAllConnections(const ConnectionsMap& connectionMap,
-                                          const cmLinkItem& rootItem,
+void cmGraphVizWriter::FindAllConnections(ConnectionsMap const& connectionMap,
+                                          cmLinkItem const& rootItem,
                                           Connections& extendedCons)
 {
   std::set<cmLinkItem> visitedItems = { rootItem };
@@ -344,33 +345,37 @@ void cmGraphVizWriter::FindAllConnections(const ConnectionsMap& connectionMap,
 
 template <typename DirFunc>
 void cmGraphVizWriter::WritePerTargetConnections(
-  const ConnectionsMap& connections, const std::string& fileNameSuffix)
+  ConnectionsMap const& connections, std::string const& fileNameSuffix)
 {
   // the per target connections must be extended by indirect dependencies
   ConnectionsMap extendedConnections;
   for (auto const& conPerTarget : connections) {
-    const cmLinkItem& rootItem = conPerTarget.first;
+    cmLinkItem const& rootItem = conPerTarget.first;
     Connections& extendedCons = extendedConnections[conPerTarget.first];
     this->FindAllConnections(connections, rootItem, extendedCons);
   }
 
   for (auto const& conPerTarget : extendedConnections) {
-    const cmLinkItem& rootItem = conPerTarget.first;
+    cmLinkItem const& rootItem = conPerTarget.first;
 
     // some of the nodes are excluded completely and are not written
     if (this->ItemExcluded(rootItem)) {
       continue;
     }
 
-    const Connections& cons = conPerTarget.second;
+    Connections const& cons = conPerTarget.second;
 
     std::unique_ptr<cmGeneratedFileStream> fileStream =
       this->CreateTargetFile(rootItem, fileNameSuffix);
 
-    for (const Connection& con : cons) {
-      const cmLinkItem& src = DirFunc::src(con);
-      const cmLinkItem& dst = DirFunc::dst(con);
-      this->WriteNode(*fileStream, con.dst);
+    // avoid write same node multiple times
+    std::unordered_set<std::string> writtenNodes = { rootItem.AsStr() };
+    for (Connection const& con : cons) {
+      cmLinkItem const& src = DirFunc::src(con);
+      cmLinkItem const& dst = DirFunc::dst(con);
+      if (writtenNodes.emplace(con.dst.AsStr()).second) {
+        this->WriteNode(*fileStream, con.dst);
+      }
       this->WriteConnection(*fileStream, src, dst, con.scopeType);
     }
 
@@ -379,7 +384,7 @@ void cmGraphVizWriter::WritePerTargetConnections(
 }
 
 void cmGraphVizWriter::WriteHeader(cmGeneratedFileStream& fs,
-                                   const std::string& name)
+                                   std::string const& name)
 {
   auto const escapedGraphName = EscapeForDotFile(name);
   fs << "digraph \"" << escapedGraphName << "\" {\n"
@@ -597,7 +602,7 @@ std::string cmGraphVizWriter::PathSafeString(std::string const& str)
   auto const extra_chars = std::set<char>{ '.', '-', '_' };
 
   for (char c : str) {
-    if (std::isalnum(c) || extra_chars.find(c) != extra_chars.cend()) {
+    if (cmsysString_isalnum(c) || extra_chars.find(c) != extra_chars.cend()) {
       pathSafeStr += c;
     }
   }

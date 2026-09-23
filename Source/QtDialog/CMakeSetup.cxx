@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include <iostream>
 
 #include "QCMake.h" // include to disable MS warnings
@@ -18,17 +18,18 @@
 #include "cmAlgorithms.h"
 #include "cmDocumentation.h"
 #include "cmDocumentationEntry.h"
+#include "cmStdIoInit.h"
 #include "cmStringAlgorithms.h"
 #include "cmSystemTools.h" // IWYU pragma: keep
 #include "cmake.h"
 
 namespace {
-const cmDocumentationEntry cmDocumentationName = {
+cmDocumentationEntry const cmDocumentationName = {
   {},
   "  cmake-gui - CMake GUI."
 };
 
-const cmDocumentationEntry cmDocumentationUsage = {
+cmDocumentationEntry const cmDocumentationUsage = {
   {},
   "  cmake-gui [options]\n"
   "  cmake-gui [options] <path-to-source>\n"
@@ -37,7 +38,7 @@ const cmDocumentationEntry cmDocumentationUsage = {
   "  cmake-gui [options] --browse-manual [<filename>]"
 };
 
-const cmDocumentationEntry cmDocumentationOptions[3] = {
+cmDocumentationEntry const cmDocumentationOptions[3] = {
   { "-S <path-to-source>", "Explicitly specify a source directory." },
   { "-B <path-to-build>", "Explicitly specify a build directory." },
   { "--preset=<preset>", "Specify a configure preset." }
@@ -53,20 +54,14 @@ static void cmAddPluginPath();
 Q_IMPORT_PLUGIN(QXcbIntegrationPlugin);
 #endif
 
-#if defined(USE_QWindowsIntegrationPlugin)
-Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
-#  if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
-Q_IMPORT_PLUGIN(QWindowsVistaStylePlugin);
-#  endif
-#endif
-
 int CMakeGUIExec(CMakeSetupDialog* window);
 void SetupDefaultQSettings();
-void OpenReferenceManual(const QString& filename);
+void OpenReferenceManual(QString const& filename);
 
 int main(int argc, char** argv)
 {
-  cmSystemTools::EnsureStdPipes();
+  cm::StdIo::Init();
+
   cmsys::Encoding::CommandLineArguments encoding_args =
     cmsys::Encoding::CommandLineArguments::Main(argc, argv);
   int argc2 = encoding_args.argc();
@@ -80,9 +75,7 @@ int main(int argc, char** argv)
   doc.addCMakeStandardDocSections();
   if (argc2 > 1 && doc.CheckOptions(argc2, argv2)) {
     // Construct and print requested documentation.
-    cmake hcm(cmake::RoleInternal, cmState::Help);
-    hcm.SetHomeDirectory("");
-    hcm.SetHomeOutputDirectory("");
+    cmake hcm(cmState::Role::Help);
     hcm.AddCMakePaths();
 
     auto generators = hcm.GetGeneratorsDocumentation();
@@ -156,7 +149,7 @@ int main(int argc, char** argv)
   std::string sourceDirectory;
   std::string presetName;
   for (int i = 1; i < args.size(); ++i) {
-    const QString& arg = args[i];
+    QString const& arg = args[i];
     if (arg.startsWith("-S")) {
       QString path = arg.mid(2);
       if (path.isEmpty()) {
@@ -172,8 +165,8 @@ int main(int argc, char** argv)
         }
       }
 
-      sourceDirectory = cmSystemTools::CollapseFullPath(path.toStdString());
-      cmSystemTools::ConvertToUnixSlashes(sourceDirectory);
+      sourceDirectory =
+        cmSystemTools::ToNormalizedPathOnDisk(path.toStdString());
     } else if (arg.startsWith("-B")) {
       QString path = arg.mid(2);
       if (path.isEmpty()) {
@@ -189,8 +182,8 @@ int main(int argc, char** argv)
         }
       }
 
-      binaryDirectory = cmSystemTools::CollapseFullPath(path.toStdString());
-      cmSystemTools::ConvertToUnixSlashes(binaryDirectory);
+      binaryDirectory =
+        cmSystemTools::ToNormalizedPathOnDisk(path.toStdString());
     } else if (arg.startsWith("--preset=")) {
       QString preset = arg.mid(cmStrLen("--preset="));
       if (preset.isEmpty()) {
@@ -223,7 +216,7 @@ int main(int argc, char** argv)
   } else {
     if (args.count() == 2) {
       std::string filePath =
-        cmSystemTools::CollapseFullPath(args[1].toStdString());
+        cmSystemTools::ToNormalizedPathOnDisk(args[1].toStdString());
 
       // check if argument is a directory containing CMakeCache.txt
       std::string buildFilePath = cmStrCat(filePath, "/CMakeCache.txt");
@@ -243,7 +236,7 @@ int main(int argc, char** argv)
       } else if (cmSystemTools::FileExists(srcFilePath.c_str())) {
         dialog.setSourceDirectory(QString::fromStdString(filePath));
         dialog.setBinaryDirectory(
-          QString::fromStdString(cmSystemTools::CollapseFullPath(".")));
+          QString::fromStdString(cmSystemTools::GetLogicalWorkingDirectory()));
       }
     }
   }
@@ -287,7 +280,7 @@ static bool cmOSXInstall(std::string const& dir, std::string const& tool)
 
 static int cmOSXInstall(std::string dir)
 {
-  if (!cmHasLiteralSuffix(dir, "/")) {
+  if (!cmHasSuffix(dir, '/')) {
     dir += "/";
   }
   return (cmOSXInstall(dir, cmSystemTools::GetCMakeCommand()) &&

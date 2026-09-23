@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #pragma once
 
 #include <cassert>
@@ -38,7 +38,7 @@ cmBasicUVIStream<CharT, Traits>::cmBasicUVIStream()
 
 template <typename CharT, typename Traits>
 cmBasicUVIStream<CharT, Traits>::cmBasicUVIStream(uv_stream_t* stream)
-  : cmBasicUVIStream()
+  : std::basic_istream<CharT, Traits>(&this->Buffer)
 {
   this->open(stream);
 }
@@ -62,50 +62,6 @@ void cmBasicUVIStream<CharT, Traits>::close()
 }
 
 using cmUVIStream = cmBasicUVIStream<char>;
-
-template <typename CharT, typename Traits = std::char_traits<CharT>>
-class cmBasicUVPipeIStream : public cmBasicUVIStream<CharT, Traits>
-{
-public:
-  cmBasicUVPipeIStream();
-  cmBasicUVPipeIStream(uv_loop_t& loop, int fd);
-
-  using cmBasicUVIStream<CharT, Traits>::is_open;
-
-  void open(uv_loop_t& loop, int fd);
-
-  void close();
-
-private:
-  cm::uv_pipe_ptr Pipe;
-};
-
-template <typename CharT, typename Traits>
-cmBasicUVPipeIStream<CharT, Traits>::cmBasicUVPipeIStream() = default;
-
-template <typename CharT, typename Traits>
-cmBasicUVPipeIStream<CharT, Traits>::cmBasicUVPipeIStream(uv_loop_t& loop,
-                                                          int fd)
-{
-  this->open(loop, fd);
-}
-
-template <typename CharT, typename Traits>
-void cmBasicUVPipeIStream<CharT, Traits>::open(uv_loop_t& loop, int fd)
-{
-  this->Pipe.init(loop, 0);
-  uv_pipe_open(this->Pipe, fd);
-  this->cmBasicUVIStream<CharT, Traits>::open(this->Pipe);
-}
-
-template <typename CharT, typename Traits>
-void cmBasicUVPipeIStream<CharT, Traits>::close()
-{
-  this->cmBasicUVIStream<CharT, Traits>::close();
-  this->Pipe.reset();
-}
-
-using cmUVPipeIStream = cmBasicUVPipeIStream<char>;
 
 class cmUVStreamReadHandle
 {
@@ -137,7 +93,7 @@ std::unique_ptr<cmUVStreamReadHandle> cmUVStreamRead(uv_stream_t* stream,
       buffer->base = data->Buffer.data();
       buffer->len = suggestedSize;
     },
-    [](uv_stream_t* s, ssize_t nread, const uv_buf_t* buffer) {
+    [](uv_stream_t* s, ssize_t nread, uv_buf_t const* buffer) {
       auto* data = static_cast<cmUVStreamReadHandle*>(s->data);
       if (nread > 0) {
         (void)buffer;

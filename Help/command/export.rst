@@ -16,6 +16,8 @@ Synopsis
   export(`EXPORT`_ <export-name> [...])
   export(`PACKAGE`_ <PackageName>)
   export(`SETUP`_ <export-name> [...])
+  export(`PACKAGE_INFO`_ <package-name> [...])
+  export(`SBOM`_ <sbom-name> [...])
 
 Exporting Targets
 ^^^^^^^^^^^^^^^^^
@@ -89,10 +91,10 @@ Exporting Targets to Android.mk
 
 .. versionadded:: 3.7
 
-This signature exports cmake built targets to the android ndk build system
+This signature exports CMake built targets to the android ndk build system
 by creating an ``Android.mk`` file that references the prebuilt targets. The
 Android NDK supports the use of prebuilt libraries, both static and shared.
-This allows cmake to build the libraries of a project and make them available
+This allows CMake to build the libraries of a project and make them available
 to an ndk build system complete with transitive dependencies, include flags
 and defines required to use the libraries. The signature takes a list of
 targets and puts them in the ``Android.mk`` file specified by the
@@ -126,6 +128,73 @@ of the :command:`install(TARGETS)` command.
 
   Specify that :command:`find_dependency` calls should be exported. See
   :command:`install(EXPORT)` for details on how this works.
+
+Exporting Targets to the |CPS|
+""""""""""""""""""""""""""""""
+
+.. signature::
+  export(PACKAGE_INFO <package-name> [...])
+
+.. code-block:: cmake
+
+  export(PACKAGE_INFO <package-name> EXPORT <export-name>
+         [PROJECT <project-name>|NO_PROJECT_METADATA]
+         [APPENDIX <appendix-name>]
+         [LOWER_CASE_FILE]
+         [VERSION <version>
+          [COMPAT_VERSION <version>]
+          [VERSION_SCHEMA <string>]]
+         [DEFAULT_TARGETS <target>...]
+         [DEFAULT_CONFIGURATIONS <config>...]
+         [LICENSE <license-string>]
+         [DEFAULT_LICENSE <license-string>]
+         [DESCRIPTION <description-string>]
+         [HOMEPAGE_URL <url-string>]
+         [CXX_MODULES_DIRECTORY <directory>])
+
+.. versionadded:: 4.3
+
+Creates a file in the |CPS|_ that may be included by outside projects to import
+targets named by ``<target>...`` from the current project's build tree.  See
+the :command:`install(PACKAGE_INFO)` command to export targets from an install
+tree.  The imported targets are implicitly in the namespace ``<package-name>``.
+
+The default file name is ``<package-name>[-<appendix-name>].cps``. If the
+``LOWER_CASE_FILE`` option is given, the file name will use the package name
+converted to lower case.  Files are written to the ``cps/<package-name>``
+subdirectory of the current build directory.
+
+See :command:`install(PACKAGE_INFO)` for a description of the other options.
+
+Exporting Software Bill of Materials (SBOM) Documents
+"""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+.. signature::
+  export(SBOM <sbom-name> [...])
+
+.. code-block:: cmake
+
+  export(SBOM <sbom-name> EXPORT <export-name>
+         [FORMAT <string>]
+         [PROJECT <project-name>|NO_PROJECT_METADATA]
+         [VERSION <major>[.<minor>[.<patch>[.<tweak>]]]]
+         [LICENSE <license-string>]
+         [DESCRIPTION <description-string>]
+         [HOMEPAGE_URL <url-string>]
+         [PACKAGE_URL <url-string>])
+
+.. versionadded:: 4.3
+.. note::
+
+  Experimental. Gated by ``CMAKE_EXPERIMENTAL_GENERATE_SBOM``.
+
+Generates a software bill of materials (SBOM) document describing the targets
+in the export ``<export-name>`` and their dependencies in the build tree.
+Files are written to the ``sbom/<sbom-name>`` subdirectory of the current
+build directory.
+
+See :command:`install(SBOM)` for details about the supported SBOM formats and a
+description of the other options.
 
 Exporting Packages
 ^^^^^^^^^^^^^^^^^^
@@ -221,3 +290,6 @@ Configure the parameters of an export. The arguments are as follows:
     this target. If specified, the generated code will check to see if the
     ``.xcframework`` exists, and if it does, it will use the ``.xcframework``
     as its imported location instead of the installed library.
+
+.. _CPS: https://cps-org.github.io/cps/
+.. |CPS| replace:: Common Package Specification

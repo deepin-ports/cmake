@@ -1,5 +1,5 @@
 # Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-# file Copyright.txt or https://cmake.org/licensing for details.
+# file LICENSE.rst or https://cmake.org/licensing for details.
 
 
 # determine the compiler to use for ISPC programs
@@ -29,7 +29,7 @@ if(NOT CMAKE_ISPC_COMPILER)
       set(CMAKE_ISPC_COMPILER_ARG1 "${CMAKE_ISPC_FLAGS_ENV_INIT}" CACHE STRING "First argument to ISPC compiler")
     endif()
     if(NOT EXISTS ${CMAKE_ISPC_COMPILER_INIT})
-      message(FATAL_ERROR "Could not find compiler set in environment variable ISPC:\n$ENV{ISPC}.")
+      message(FATAL_ERROR "Could not find the compiler specified in the environment variable ISPC:\n$ENV{ISPC}.")
     endif()
   endif()
 

@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #pragma once
 
 #include "cmConfigure.h" // IWYU pragma: keep
@@ -8,26 +8,16 @@
 #include <map>
 #include <set>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include <cm/string_view>
 
 #include "cmGeneratorExpression.h"
+#include "cmMessageType.h"
 
 class cmExportSet;
 class cmGeneratorTarget;
 class cmLocalGenerator;
-
-#define STRINGIFY_HELPER(X) #X
-#define STRINGIFY(X) STRINGIFY_HELPER(X)
-
-#define DEVEL_CMAKE_VERSION(major, minor)                                     \
-  (CMake_VERSION_ENCODE(major, minor, 0) >                                    \
-       CMake_VERSION_ENCODE(CMake_VERSION_MAJOR, CMake_VERSION_MINOR, 0)      \
-     ? STRINGIFY(CMake_VERSION_MAJOR) "." STRINGIFY(                          \
-         CMake_VERSION_MINOR) "." STRINGIFY(CMake_VERSION_PATCH)              \
-     : #major "." #minor ".0")
 
 /** \class cmExportFileGenerator
  * \brief Generate files exporting targets from a build or install tree.
@@ -131,9 +121,20 @@ protected:
     cmGeneratorExpression::PreprocessContext preprocessRule,
     ImportPropertyMap& properties);
 
-  virtual void ReportError(std::string const& errorMessage) const = 0;
+  virtual void IssueMessage(MessageType type,
+                            std::string const& message) const = 0;
 
-  using ExportInfo = std::pair<std::vector<std::string>, std::string>;
+  void ReportError(std::string const& errorMessage) const
+  {
+    this->IssueMessage(MessageType::FATAL_ERROR, errorMessage);
+  }
+
+  struct ExportInfo
+  {
+    std::vector<std::string> Files;
+    std::set<std::string> Sets;
+    std::set<std::string> Namespaces;
+  };
 
   /** Find the set of export files and the unique namespace (if any) for a
    *  target. */
@@ -165,6 +166,8 @@ protected:
 
   bool AddTargetNamespace(std::string& input, cmGeneratorTarget const* target,
                           cmLocalGenerator const* lg);
+
+  static std::string PropertyConfigSuffix(std::string const& config);
 
   // The namespace in which the exports are placed in the generated file.
   std::string Namespace;

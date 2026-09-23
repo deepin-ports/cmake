@@ -1,5 +1,5 @@
 # Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-# file Copyright.txt or https://cmake.org/licensing for details.
+# file LICENSE.rst or https://cmake.org/licensing for details.
 
 
 # determine the compiler to use for C++ programs
@@ -13,7 +13,6 @@
 #
 # Sets the following variables:
 #   CMAKE_CXX_COMPILER
-#   CMAKE_COMPILER_IS_GNUCXX
 #   CMAKE_AR
 #   CMAKE_RANLIB
 #
@@ -45,7 +44,7 @@ else()
         set(CMAKE_CXX_COMPILER_ARG1 "${CMAKE_CXX_FLAGS_ENV_INIT}" CACHE STRING "Arguments to CXX compiler")
       endif()
       if(NOT EXISTS ${CMAKE_CXX_COMPILER_INIT})
-        message(FATAL_ERROR "Could not find compiler set in environment variable CXX:\n$ENV{CXX}.\n${CMAKE_CXX_COMPILER_INIT}")
+        message(FATAL_ERROR "Could not find the compiler specified in the environment variable CXX:\n$ENV{CXX}.\n${CMAKE_CXX_COMPILER_INIT}")
       endif()
     endif()
 
@@ -216,16 +215,14 @@ else()
   set(_SET_CMAKE_CXX_COMPILER_SYSROOT "")
 endif()
 
-if(CMAKE_CXX_COMPILER_ARCHITECTURE_ID)
-  set(_SET_CMAKE_CXX_COMPILER_ARCHITECTURE_ID
-    "set(CMAKE_CXX_COMPILER_ARCHITECTURE_ID ${CMAKE_CXX_COMPILER_ARCHITECTURE_ID})")
-else()
-  set(_SET_CMAKE_CXX_COMPILER_ARCHITECTURE_ID "")
-endif()
-
 if(MSVC_CXX_ARCHITECTURE_ID)
   set(SET_MSVC_CXX_ARCHITECTURE_ID
     "set(MSVC_CXX_ARCHITECTURE_ID ${MSVC_CXX_ARCHITECTURE_ID})")
+endif()
+
+if(CMAKE_CXX_MSVC_I18N_DIR)
+  set(SET_CMAKE_CXX_MSVC_I18N_DIR
+    "set(CMAKE_CXX_MSVC_I18N_DIR ${CMAKE_CXX_MSVC_I18N_DIR})")
 endif()
 
 if(CMAKE_CXX_XCODE_ARCHS)

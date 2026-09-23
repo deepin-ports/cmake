@@ -1,10 +1,11 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmArgumentParser.h"
 
 #include <algorithm>
 
 #include "cmArgumentParserTypes.h"
+#include "cmExecutionStatus.h"
 #include "cmMakefile.h"
 #include "cmMessageType.h"
 #include "cmStringAlgorithms.h"
@@ -14,11 +15,9 @@ namespace ArgumentParser {
 auto KeywordActionMap::Emplace(cm::string_view name, KeywordAction action)
   -> std::pair<iterator, bool>
 {
-  auto const it =
-    std::lower_bound(this->begin(), this->end(), name,
-                     [](value_type const& elem, cm::string_view const& k) {
-                       return elem.first < k;
-                     });
+  auto const it = std::lower_bound(
+    this->begin(), this->end(), name,
+    [](value_type const& elem, cm::string_view k) { return elem.first < k; });
   return (it != this->end() && it->first == name)
     ? std::make_pair(it, false)
     : std::make_pair(this->emplace(it, name, std::move(action)), true);
@@ -26,11 +25,9 @@ auto KeywordActionMap::Emplace(cm::string_view name, KeywordAction action)
 
 auto KeywordActionMap::Find(cm::string_view name) const -> const_iterator
 {
-  auto const it =
-    std::lower_bound(this->begin(), this->end(), name,
-                     [](value_type const& elem, cm::string_view const& k) {
-                       return elem.first < k;
-                     });
+  auto const it = std::lower_bound(
+    this->begin(), this->end(), name,
+    [](value_type const& elem, cm::string_view k) { return elem.first < k; });
   return (it != this->end() && it->first == name) ? it : this->end();
 }
 
@@ -56,8 +53,8 @@ auto PositionActionMap::Find(std::size_t pos) const -> const_iterator
 void Instance::Bind(std::function<Continue(cm::string_view)> f,
                     ExpectAtLeast expect)
 {
-  this->KeywordValueFunc = std::move(f);
-  this->KeywordValuesExpected = expect.Count;
+  this->GetState().KeywordValueFunc = std::move(f);
+  this->GetState().KeywordValuesExpected = expect.Count;
 }
 
 void Instance::Bind(bool& val)
@@ -76,15 +73,25 @@ void Instance::Bind(std::string& val)
     ExpectAtLeast{ 1 });
 }
 
+void Instance::Bind(MaybeEmpty<std::string>& val)
+{
+  this->Bind(
+    [&val](cm::string_view arg) -> Continue {
+      val = std::string(arg);
+      return Continue::No;
+    },
+    ExpectAtLeast{ 1 });
+}
+
 void Instance::Bind(NonEmpty<std::string>& val)
 {
   this->Bind(
     [this, &val](cm::string_view arg) -> Continue {
       if (arg.empty() && this->ParseResults) {
-        this->ParseResults->AddKeywordError(this->Keyword,
+        this->ParseResults->AddKeywordError(this->GetState().Keyword,
                                             "  empty string not allowed\n");
       }
-      val.assign(std::string(arg));
+      val = std::string(arg);
       return Continue::No;
     },
     ExpectAtLeast{ 1 });
@@ -94,7 +101,7 @@ void Instance::Bind(Maybe<std::string>& val)
 {
   this->Bind(
     [&val](cm::string_view arg) -> Continue {
-      static_cast<std::string&>(val) = std::string(arg);
+      val = std::string(arg);
       return Continue::No;
     },
     ExpectAtLeast{ 0 });
@@ -132,39 +139,51 @@ void Instance::Bind(std::vector<std::vector<std::string>>& multiVal)
     ExpectAtLeast{ 0 });
 }
 
-void Instance::Consume(std::size_t pos, cm::string_view arg)
+void Instance::Consume(cm::string_view arg)
 {
-  auto const it = this->Bindings.Keywords.Find(arg);
-  if (it != this->Bindings.Keywords.end()) {
+  ParserState& state = this->GetState();
+
+  auto const it = state.Bindings.Keywords.Find(arg);
+  if (it != state.Bindings.Keywords.end()) {
     this->FinishKeyword();
-    this->Keyword = it->first;
-    this->KeywordValuesSeen = 0;
-    this->DoneWithPositional = true;
-    if (this->Bindings.ParsedKeyword) {
-      this->Bindings.ParsedKeyword(*this, it->first);
+    state.Keyword = it->first;
+    state.KeywordValuesSeen = 0;
+    state.DoneWithPositional = true;
+    if (state.Bindings.ParsedKeyword) {
+      state.Bindings.ParsedKeyword(*this, it->first);
     }
     it->second(*this);
     return;
   }
 
-  if (this->KeywordValueFunc) {
-    switch (this->KeywordValueFunc(arg)) {
+  if (!state.DoneWithPositional) {
+    auto const pit = state.Bindings.Positions.Find(state.Pos);
+    if (pit != state.Bindings.Positions.end()) {
+      pit->second(*this, state.Pos, arg);
+      return;
+    }
+
+    if (state.Bindings.TrailingArgs) {
+      state.Keyword = ""_s;
+      state.KeywordValuesSeen = 0;
+      state.DoneWithPositional = true;
+      state.Bindings.TrailingArgs(*this);
+      if (!state.KeywordValueFunc) {
+        return;
+      }
+    }
+  }
+
+  if (state.KeywordValueFunc) {
+    switch (state.KeywordValueFunc(arg)) {
       case Continue::Yes:
         break;
       case Continue::No:
-        this->KeywordValueFunc = nullptr;
+        state.KeywordValueFunc = nullptr;
         break;
     }
-    ++this->KeywordValuesSeen;
+    ++state.KeywordValuesSeen;
     return;
-  }
-
-  if (!this->DoneWithPositional) {
-    auto const pit = this->Bindings.Positions.Find(pos);
-    if (pit != this->Bindings.Positions.end()) {
-      pit->second(*this, pos, arg);
-      return;
-    }
   }
 
   if (this->UnparsedArguments) {
@@ -174,16 +193,18 @@ void Instance::Consume(std::size_t pos, cm::string_view arg)
 
 void Instance::FinishKeyword()
 {
-  if (this->Keyword.empty()) {
+  ParserState const& state = this->GetState();
+  if (!state.DoneWithPositional) {
     return;
   }
-  if (this->KeywordValuesSeen < this->KeywordValuesExpected) {
+
+  if (state.KeywordValuesSeen < state.KeywordValuesExpected) {
     if (this->ParseResults) {
-      this->ParseResults->AddKeywordError(this->Keyword,
+      this->ParseResults->AddKeywordError(state.Keyword,
                                           "  missing required value\n");
     }
-    if (this->Bindings.KeywordMissingValue) {
-      this->Bindings.KeywordMissingValue(*this, this->Keyword);
+    if (state.Bindings.KeywordMissingValue) {
+      state.Bindings.KeywordMissingValue(*this, state.Keyword);
     }
   }
 }
@@ -194,10 +215,38 @@ bool ParseResult::MaybeReportError(cmMakefile& mf) const
     return false;
   }
   std::string e;
-  for (auto const& ke : this->KeywordErrors) {
-    e = cmStrCat(e, "Error after keyword \"", ke.first, "\":\n", ke.second);
+  for (auto const& kel : this->KeywordErrors) {
+    e = cmStrCat(std::move(e), "Error after keyword \"", kel.first, "\":\n",
+                 cmJoin(kel.second, {}));
   }
   mf.IssueMessage(MessageType::FATAL_ERROR, e);
+  return true;
+}
+
+bool ParseResult::Check(cm::string_view context,
+                        std::vector<std::string> const* unparsedArguments,
+                        cmExecutionStatus& status) const
+{
+  if (unparsedArguments && !unparsedArguments->empty()) {
+    status.SetError(cmStrCat(context, " given unknown argument: \""_s,
+                             unparsedArguments->front(), "\"."_s));
+    return false;
+  }
+
+  if (!this->KeywordErrors.empty()) {
+    std::string msg = cmStrCat(
+      context, (context.empty() ? ""_s : " "_s), "given invalid "_s,
+      (this->KeywordErrors.size() > 1 ? "arguments:"_s : "argument:"_s));
+    for (auto const& kel : this->KeywordErrors) {
+      for (auto const& ke : kel.second) {
+        msg =
+          cmStrCat(msg, "\n  "_s, kel.first, ": "_s, cmStripWhitespace(ke));
+      }
+    }
+    status.SetError(msg);
+    return false;
+  }
+
   return true;
 }
 

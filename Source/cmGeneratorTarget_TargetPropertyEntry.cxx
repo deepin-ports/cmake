@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 /* clang-format off */
 #include "cmGeneratorTarget.h"
 /* clang-format on */
@@ -17,26 +17,23 @@
 #include "cmList.h"
 #include "cmListFileCache.h"
 
-class cmLocalGenerator;
 class cmake;
-struct cmGeneratorExpressionDAGChecker;
 
-cmLinkImplItem cmGeneratorTarget::TargetPropertyEntry::NoLinkImplItem;
+cmLinkItem cmGeneratorTarget::TargetPropertyEntry::NoLinkItem;
 
 class TargetPropertyEntryString : public cmGeneratorTarget::TargetPropertyEntry
 {
 public:
   TargetPropertyEntryString(BT<std::string> propertyValue,
-                            cmLinkImplItem const& item = NoLinkImplItem)
+                            cmLinkItem const& item = NoLinkItem)
     : cmGeneratorTarget::TargetPropertyEntry(item)
     , PropertyValue(std::move(propertyValue))
   {
   }
 
-  const std::string& Evaluate(cmLocalGenerator*, const std::string&,
+  std::string const& Evaluate(cm::GenEx::Context const&,
                               cmGeneratorTarget const*,
-                              cmGeneratorExpressionDAGChecker*,
-                              std::string const&) const override
+                              cmGeneratorExpressionDAGChecker*) const override
   {
     return this->PropertyValue.Value;
   }
@@ -58,19 +55,17 @@ class TargetPropertyEntryGenex : public cmGeneratorTarget::TargetPropertyEntry
 {
 public:
   TargetPropertyEntryGenex(std::unique_ptr<cmCompiledGeneratorExpression> cge,
-                           cmLinkImplItem const& item = NoLinkImplItem)
+                           cmLinkItem const& item = NoLinkItem)
     : cmGeneratorTarget::TargetPropertyEntry(item)
     , ge(std::move(cge))
   {
   }
 
-  const std::string& Evaluate(cmLocalGenerator* lg, const std::string& config,
-                              cmGeneratorTarget const* headTarget,
-                              cmGeneratorExpressionDAGChecker* dagChecker,
-                              std::string const& language) const override
+  std::string const& Evaluate(
+    cm::GenEx::Context const& context, cmGeneratorTarget const* headTarget,
+    cmGeneratorExpressionDAGChecker* dagChecker) const override
   {
-    return this->ge->Evaluate(lg, config, headTarget, dagChecker, nullptr,
-                              language);
+    return this->ge->Evaluate(context, dagChecker, headTarget);
   }
 
   cmListFileBacktrace GetBacktrace() const override
@@ -86,7 +81,7 @@ public:
   }
 
 private:
-  const std::unique_ptr<cmCompiledGeneratorExpression> ge;
+  std::unique_ptr<cmCompiledGeneratorExpression> const ge;
 };
 
 class TargetPropertyEntryFileSet
@@ -96,7 +91,7 @@ public:
   TargetPropertyEntryFileSet(
     std::vector<std::string> dirs, bool contextSensitiveDirs,
     std::unique_ptr<cmCompiledGeneratorExpression> entryCge,
-    const cmFileSet* fileSet, cmLinkImplItem const& item = NoLinkImplItem)
+    cmFileSet const* fileSet, cmLinkItem const& item = NoLinkItem)
     : cmGeneratorTarget::TargetPropertyEntry(item)
     , BaseDirs(std::move(dirs))
     , ContextSensitiveDirs(contextSensitiveDirs)
@@ -105,14 +100,13 @@ public:
   {
   }
 
-  const std::string& Evaluate(cmLocalGenerator* lg, const std::string& config,
-                              cmGeneratorTarget const* headTarget,
-                              cmGeneratorExpressionDAGChecker* dagChecker,
-                              std::string const& /*lang*/) const override
+  std::string const& Evaluate(
+    cm::GenEx::Context const& context, cmGeneratorTarget const* headTarget,
+    cmGeneratorExpressionDAGChecker* dagChecker) const override
   {
     std::map<std::string, std::vector<std::string>> filesPerDir;
     this->FileSet->EvaluateFileEntry(this->BaseDirs, filesPerDir,
-                                     this->EntryCge, lg, config, headTarget,
+                                     this->EntryCge, context, headTarget,
                                      dagChecker);
 
     std::vector<std::string> files;
@@ -142,10 +136,10 @@ public:
   }
 
 private:
-  const std::vector<std::string> BaseDirs;
-  const bool ContextSensitiveDirs;
-  const std::unique_ptr<cmCompiledGeneratorExpression> EntryCge;
-  const cmFileSet* FileSet;
+  std::vector<std::string> const BaseDirs;
+  bool const ContextSensitiveDirs;
+  std::unique_ptr<cmCompiledGeneratorExpression> const EntryCge;
+  cmFileSet const* FileSet;
 };
 
 std::unique_ptr<cmGeneratorTarget::TargetPropertyEntry>
@@ -170,15 +164,15 @@ std::unique_ptr<cmGeneratorTarget::TargetPropertyEntry>
 cmGeneratorTarget::TargetPropertyEntry::CreateFileSet(
   std::vector<std::string> dirs, bool contextSensitiveDirs,
   std::unique_ptr<cmCompiledGeneratorExpression> entryCge,
-  const cmFileSet* fileSet, cmLinkImplItem const& item)
+  cmFileSet const* fileSet, cmLinkItem const& item)
 {
   return cm::make_unique<TargetPropertyEntryFileSet>(
     std::move(dirs), contextSensitiveDirs, std::move(entryCge), fileSet, item);
 }
 
 cmGeneratorTarget::TargetPropertyEntry::TargetPropertyEntry(
-  cmLinkImplItem const& item)
-  : LinkImplItem(item)
+  cmLinkItem const& item)
+  : LinkItem(item)
 {
 }
 

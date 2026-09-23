@@ -1,9 +1,10 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #pragma once
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
+#include <cstddef>
 #include <cstdint>
 #include <iosfwd>
 #include <memory>
@@ -20,13 +21,13 @@ class cmELF
 {
 public:
   /** Construct with the name of the ELF input file to parse.  */
-  cmELF(const char* fname);
+  cmELF(char const* fname);
 
   /** Destruct.   */
   ~cmELF();
 
-  cmELF(const cmELF&) = delete;
-  cmELF& operator=(const cmELF&) = delete;
+  cmELF(cmELF const&) = delete;
+  cmELF& operator=(cmELF const&) = delete;
 
   /** Get the error message if any.  */
   std::string const& GetErrorMessage() const { return this->ErrorMessage; }
@@ -73,7 +74,7 @@ public:
   std::uint16_t GetMachine() const;
 
   /** Get the number of ELF sections present.  */
-  unsigned int GetNumberOfSections() const;
+  std::size_t GetNumberOfSections() const;
 
   /** Get the position of a DYNAMIC section header entry.  Returns
       zero on error.  */
@@ -86,7 +87,7 @@ public:
   /** Encodes a DYNAMIC section header entry list into a char vector according
       to the type of ELF file this is */
   std::vector<char> EncodeDynamicEntries(
-    const DynamicEntryList& entries) const;
+    DynamicEntryList const& entries) const;
 
   /** Returns true if the ELF file has a dynamic section **/
   bool HasDynamicSection() const;
@@ -109,7 +110,7 @@ public:
 
   /** Interesting dynamic tags.
       If the tag is 0, it does not exist in the host ELF implementation */
-  static const long TagRPath, TagRunPath, TagMipsRldMapRel;
+  static long const TagRPath, TagRunPath, TagMipsRldMapRel;
 
 private:
   friend class cmELFInternal;

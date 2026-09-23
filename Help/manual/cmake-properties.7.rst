@@ -40,8 +40,8 @@ Properties of Global Scope
    /prop_gbl/GENERATOR_IS_MULTI_CONFIG
    /prop_gbl/GLOBAL_DEPENDS_DEBUG_MODE
    /prop_gbl/GLOBAL_DEPENDS_NO_CYCLES
-   /prop_gbl/INSTALL_PARALLEL
    /prop_gbl/IN_TRY_COMPILE
+   /prop_gbl/INSTALL_PARALLEL
    /prop_gbl/JOB_POOLS
    /prop_gbl/PACKAGES_FOUND
    /prop_gbl/PACKAGES_NOT_FOUND
@@ -97,6 +97,7 @@ Properties on Directories
    /prop_dir/VARIABLES
    /prop_dir/VS_GLOBAL_SECTION_POST_section
    /prop_dir/VS_GLOBAL_SECTION_PRE_section
+   /prop_dir/VS_SOLUTION_ITEMS
    /prop_dir/VS_STARTUP_PROJECT
 
 .. _`Target Properties`:
@@ -144,6 +145,7 @@ Properties on Targets
    /prop_tgt/AUTOMOC_COMPILER_PREDEFINES
    /prop_tgt/AUTOMOC_DEPEND_FILTERS
    /prop_tgt/AUTOMOC_EXECUTABLE
+   /prop_tgt/AUTOMOC_INCLUDE_DIRECTORIES
    /prop_tgt/AUTOMOC_MACRO_NAMES
    /prop_tgt/AUTOMOC_MOC_OPTIONS
    /prop_tgt/AUTOMOC_PATH_PREFIX
@@ -203,6 +205,7 @@ Properties on Targets
    /prop_tgt/CXX_STANDARD
    /prop_tgt/CXX_STANDARD_REQUIRED
    /prop_tgt/DEBUG_POSTFIX
+   /prop_tgt/DEBUGGER_WORKING_DIRECTORY
    /prop_tgt/DEFINE_SYMBOL
    /prop_tgt/DEPLOYMENT_ADDITIONAL_FILES
    /prop_tgt/DEPLOYMENT_REMOTE_DIRECTORY
@@ -223,8 +226,10 @@ Properties on Targets
    /prop_tgt/EXPORT_NAME
    /prop_tgt/EXPORT_NO_SYSTEM
    /prop_tgt/EXPORT_PROPERTIES
+   /prop_tgt/FASTBUILD_CACHING
+   /prop_tgt/FASTBUILD_DISTRIBUTION
    /prop_tgt/FOLDER
-   /prop_tgt/Fortran_BUILDING_INSTRINSIC_MODULES
+   /prop_tgt/Fortran_BUILDING_INTRINSIC_MODULES
    /prop_tgt/Fortran_FORMAT
    /prop_tgt/Fortran_MODULE_DIRECTORY
    /prop_tgt/Fortran_PREPROCESS
@@ -252,6 +257,7 @@ Properties on Targets
    /prop_tgt/IMPORTED_CXX_MODULES_COMPILE_DEFINITIONS
    /prop_tgt/IMPORTED_CXX_MODULES_COMPILE_FEATURES
    /prop_tgt/IMPORTED_CXX_MODULES_COMPILE_OPTIONS
+   /prop_tgt/IMPORTED_CXX_MODULES_CONFIG
    /prop_tgt/IMPORTED_CXX_MODULES_INCLUDE_DIRECTORIES
    /prop_tgt/IMPORTED_CXX_MODULES_LINK_LIBRARIES
    /prop_tgt/IMPORTED_GLOBAL
@@ -279,6 +285,8 @@ Properties on Targets
    /prop_tgt/IMPORT_SUFFIX
    /prop_tgt/INCLUDE_DIRECTORIES
    /prop_tgt/INSTALL_NAME_DIR
+   /prop_tgt/INSTALL_OBJECT_NAME_STRATEGY
+   /prop_tgt/INSTALL_OBJECT_ONLY_USE_DESTINATION
    /prop_tgt/INSTALL_REMOVE_ENVIRONMENT_RPATH
    /prop_tgt/INSTALL_RPATH
    /prop_tgt/INSTALL_RPATH_USE_LINK_PATH
@@ -316,8 +324,10 @@ Properties on Targets
    /prop_tgt/LANG_CPPCHECK
    /prop_tgt/LANG_CPPLINT
    /prop_tgt/LANG_EXTENSIONS
+   /prop_tgt/LANG_ICSTAT
    /prop_tgt/LANG_INCLUDE_WHAT_YOU_USE
    /prop_tgt/LANG_LINKER_LAUNCHER
+   /prop_tgt/LANG_PVS_STUDIO
    /prop_tgt/LANG_STANDARD
    /prop_tgt/LANG_STANDARD_REQUIRED
    /prop_tgt/LANG_VISIBILITY_PRESET
@@ -342,6 +352,7 @@ Properties on Targets
    /prop_tgt/LINK_OPTIONS
    /prop_tgt/LINK_SEARCH_END_STATIC
    /prop_tgt/LINK_SEARCH_START_STATIC
+   /prop_tgt/LINK_WARNING_AS_ERROR
    /prop_tgt/LINK_WHAT_YOU_USE
    /prop_tgt/LINKER_LANGUAGE
    /prop_tgt/LINKER_TYPE
@@ -356,6 +367,7 @@ Properties on Targets
    /prop_tgt/MANUALLY_ADDED_DEPENDENCIES
    /prop_tgt/MAP_IMPORTED_CONFIG_CONFIG
    /prop_tgt/MSVC_DEBUG_INFORMATION_FORMAT
+   /prop_tgt/MSVC_RUNTIME_CHECKS
    /prop_tgt/MSVC_RUNTIME_LIBRARY
    /prop_tgt/NAME
    /prop_tgt/NO_SONAME
@@ -382,6 +394,7 @@ Properties on Targets
    /prop_tgt/PRECOMPILE_HEADERS_REUSE_FROM
    /prop_tgt/PREFIX
    /prop_tgt/PRIVATE_HEADER
+   /prop_tgt/PRIVATE_HEADER_SETS_TO_VERIFY
    /prop_tgt/PROJECT_LABEL
    /prop_tgt/PUBLIC_HEADER
    /prop_tgt/RESOURCE
@@ -393,9 +406,11 @@ Properties on Targets
    /prop_tgt/RUNTIME_OUTPUT_NAME
    /prop_tgt/RUNTIME_OUTPUT_NAME_CONFIG
    /prop_tgt/SKIP_BUILD_RPATH
+   /prop_tgt/SKIP_LINTING
    /prop_tgt/SOURCE_DIR
    /prop_tgt/SOURCES
    /prop_tgt/SOVERSION
+   /prop_tgt/SPDX_LICENSE
    /prop_tgt/STATIC_LIBRARY_FLAGS
    /prop_tgt/STATIC_LIBRARY_FLAGS_CONFIG
    /prop_tgt/STATIC_LIBRARY_OPTIONS
@@ -405,6 +420,7 @@ Properties on Targets
    /prop_tgt/Swift_LANGUAGE_VERSION
    /prop_tgt/Swift_MODULE_DIRECTORY
    /prop_tgt/Swift_MODULE_NAME
+   /prop_tgt/SYMBOLIC
    /prop_tgt/SYSTEM
    /prop_tgt/TEST_LAUNCHER
    /prop_tgt/TRANSITIVE_COMPILE_PROPERTIES
@@ -414,9 +430,12 @@ Properties on Targets
    /prop_tgt/UNITY_BUILD_BATCH_SIZE
    /prop_tgt/UNITY_BUILD_CODE_AFTER_INCLUDE
    /prop_tgt/UNITY_BUILD_CODE_BEFORE_INCLUDE
+   /prop_tgt/UNITY_BUILD_FILENAME_PREFIX
    /prop_tgt/UNITY_BUILD_MODE
+   /prop_tgt/UNITY_BUILD_RELOCATABLE
    /prop_tgt/UNITY_BUILD_UNIQUE_ID
    /prop_tgt/VERIFY_INTERFACE_HEADER_SETS
+   /prop_tgt/VERIFY_PRIVATE_HEADER_SETS
    /prop_tgt/VERSION
    /prop_tgt/VISIBILITY_INLINES_HIDDEN
    /prop_tgt/VS_CONFIGURATION_TYPE
@@ -491,10 +510,12 @@ Properties on Targets
    /prop_tgt/XCODE_SCHEME_GUARD_MALLOC
    /prop_tgt/XCODE_SCHEME_LAUNCH_CONFIGURATION
    /prop_tgt/XCODE_SCHEME_LAUNCH_MODE
+   /prop_tgt/XCODE_SCHEME_LLDB_INIT_FILE
    /prop_tgt/XCODE_SCHEME_MAIN_THREAD_CHECKER_STOP
    /prop_tgt/XCODE_SCHEME_MALLOC_GUARD_EDGES
    /prop_tgt/XCODE_SCHEME_MALLOC_SCRIBBLE
    /prop_tgt/XCODE_SCHEME_MALLOC_STACK
+   /prop_tgt/XCODE_SCHEME_TEST_CONFIGURATION
    /prop_tgt/XCODE_SCHEME_THREAD_SANITIZER
    /prop_tgt/XCODE_SCHEME_THREAD_SANITIZER_STOP
    /prop_tgt/XCODE_SCHEME_UNDEFINED_BEHAVIOUR_SANITIZER
@@ -563,12 +584,15 @@ Properties on Source Files
    /prop_sf/GENERATED
    /prop_sf/HEADER_FILE_ONLY
    /prop_sf/INCLUDE_DIRECTORIES
+   /prop_sf/INSTALL_OBJECT_NAME
+   /prop_sf/JOB_POOL_COMPILE
    /prop_sf/KEEP_EXTENSION
    /prop_sf/LABELS
    /prop_sf/LANGUAGE
    /prop_sf/LOCATION
    /prop_sf/MACOSX_PACKAGE_LOCATION
    /prop_sf/OBJECT_DEPENDS
+   /prop_sf/OBJECT_NAME
    /prop_sf/OBJECT_OUTPUTS
    /prop_sf/SKIP_AUTOGEN
    /prop_sf/SKIP_AUTOMOC
@@ -583,6 +607,7 @@ Properties on Source Files
    /prop_sf/UNITY_GROUP
    /prop_sf/VS_COPY_TO_OUT_DIR
    /prop_sf/VS_CSHARP_tagname
+   /prop_sf/VS_CUSTOM_COMMAND_DISABLE_PARALLEL_BUILD
    /prop_sf/VS_DEPLOYMENT_CONTENT
    /prop_sf/VS_DEPLOYMENT_LOCATION
    /prop_sf/VS_INCLUDE_IN_VSIX
@@ -655,6 +680,7 @@ Deprecated Properties on Targets
    :maxdepth: 1
 
    /prop_tgt/COMPILE_DEFINITIONS_CONFIG
+   /prop_tgt/Fortran_BUILDING_INSTRINSIC_MODULES
    /prop_tgt/IMPORTED_NO_SYSTEM
    /prop_tgt/IOS_INSTALL_COMBINED
    /prop_tgt/POST_INSTALL_SCRIPT

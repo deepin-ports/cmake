@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmFileAPIToolchains.h"
 
 #include <memory>
@@ -24,12 +24,13 @@ struct ToolchainVariable
   std::string ObjectKey;
   std::string VariableSuffix;
   bool IsList;
+  bool OmitEmpty;
 };
 
 class Toolchains
 {
   cmFileAPI& FileAPI;
-  unsigned long Version;
+  unsigned int Version;
 
   Json::Value DumpToolchains();
   Json::Value DumpToolchain(std::string const& lang);
@@ -41,11 +42,11 @@ class Toolchains
                              ToolchainVariable const& variable);
 
 public:
-  Toolchains(cmFileAPI& fileAPI, unsigned long version);
+  Toolchains(cmFileAPI& fileAPI, unsigned int version);
   Json::Value Dump();
 };
 
-Toolchains::Toolchains(cmFileAPI& fileAPI, unsigned long version)
+Toolchains::Toolchains(cmFileAPI& fileAPI, unsigned int version)
   : FileAPI(fileAPI)
   , Version(version)
 {
@@ -73,26 +74,27 @@ Json::Value Toolchains::DumpToolchains()
 
 Json::Value Toolchains::DumpToolchain(std::string const& lang)
 {
-  static const std::vector<ToolchainVariable> CompilerVariables{
-    { "path", "COMPILER", false },
-    { "id", "COMPILER_ID", false },
-    { "version", "COMPILER_VERSION", false },
-    { "target", "COMPILER_TARGET", false },
+  static std::vector<ToolchainVariable> const CompilerVariables{
+    { "path", "COMPILER", false, false },
+    { "commandFragment", "COMPILER_ARG1", false, true },
+    { "id", "COMPILER_ID", false, false },
+    { "version", "COMPILER_VERSION", false, false },
+    { "target", "COMPILER_TARGET", false, false },
   };
 
-  static const std::vector<ToolchainVariable> CompilerImplicitVariables{
-    { "includeDirectories", "IMPLICIT_INCLUDE_DIRECTORIES", true },
-    { "linkDirectories", "IMPLICIT_LINK_DIRECTORIES", true },
-    { "linkFrameworkDirectories", "IMPLICIT_LINK_FRAMEWORK_DIRECTORIES",
-      true },
-    { "linkLibraries", "IMPLICIT_LINK_LIBRARIES", true },
+  static std::vector<ToolchainVariable> const CompilerImplicitVariables{
+    { "includeDirectories", "IMPLICIT_INCLUDE_DIRECTORIES", true, false },
+    { "linkDirectories", "IMPLICIT_LINK_DIRECTORIES", true, false },
+    { "linkFrameworkDirectories", "IMPLICIT_LINK_FRAMEWORK_DIRECTORIES", true,
+      false },
+    { "linkLibraries", "IMPLICIT_LINK_LIBRARIES", true, false },
   };
 
-  static const ToolchainVariable SourceFileExtensionsVariable{
-    "sourceFileExtensions", "SOURCE_FILE_EXTENSIONS", true
+  static ToolchainVariable const SourceFileExtensionsVariable{
+    "sourceFileExtensions", "SOURCE_FILE_EXTENSIONS", true, false
   };
 
-  const auto& mf =
+  auto const& mf =
     this->FileAPI.GetCMakeInstance()->GetGlobalGenerator()->GetMakefiles()[0];
   Json::Value toolchain = Json::objectValue;
   toolchain["language"] = lang;
@@ -110,7 +112,7 @@ Json::Value Toolchains::DumpToolchainVariables(
   std::vector<ToolchainVariable> const& variables)
 {
   Json::Value object = Json::objectValue;
-  for (const auto& variable : variables) {
+  for (auto const& variable : variables) {
     this->DumpToolchainVariable(mf, object, lang, variable);
   }
   return object;
@@ -122,28 +124,30 @@ void Toolchains::DumpToolchainVariable(cmMakefile const* mf,
                                        ToolchainVariable const& variable)
 {
   std::string const variableName =
-    cmStrCat("CMAKE_", lang, "_", variable.VariableSuffix);
+    cmStrCat("CMAKE_", lang, '_', variable.VariableSuffix);
 
   if (variable.IsList) {
     cmValue data = mf->GetDefinition(variableName);
     if (data) {
       cmList values(data);
-      Json::Value jsonArray = Json::arrayValue;
-      for (auto const& value : values) {
-        jsonArray.append(value);
+      if (!variable.OmitEmpty || !values.empty()) {
+        Json::Value jsonArray = Json::arrayValue;
+        for (auto const& value : values) {
+          jsonArray.append(value);
+        }
+        object[variable.ObjectKey] = jsonArray;
       }
-      object[variable.ObjectKey] = jsonArray;
     }
   } else {
     cmValue def = mf->GetDefinition(variableName);
-    if (def) {
+    if (def && (!variable.OmitEmpty || !def.IsEmpty())) {
       object[variable.ObjectKey] = *def;
     }
   }
 }
 }
 
-Json::Value cmFileAPIToolchainsDump(cmFileAPI& fileAPI, unsigned long version)
+Json::Value cmFileAPIToolchainsDump(cmFileAPI& fileAPI, unsigned int version)
 {
   Toolchains toolchains(fileAPI, version);
   return toolchains.Dump();

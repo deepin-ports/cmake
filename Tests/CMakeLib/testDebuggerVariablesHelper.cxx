@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 
 #include <memory>
 #include <set>
@@ -54,8 +54,7 @@ static Dummies CreateDummies(
   std::string currentBinaryDirectory = "c:/CurrentBinaryDirectory")
 {
   Dummies dummies;
-  dummies.CMake =
-    std::make_shared<cmake>(cmake::RoleProject, cmState::Project);
+  dummies.CMake = std::make_shared<cmake>(cmState::Role::Project);
   cmState* state = dummies.CMake->GetState();
   dummies.GlobalGenerator =
     std::make_shared<cmGlobalGenerator>(dummies.CMake.get());
@@ -74,9 +73,9 @@ static bool testCreateFromPolicyMap()
     std::make_shared<cmDebugger::cmDebuggerVariablesManager>();
 
   cmPolicies::PolicyMap policyMap;
-  policyMap.Set(cmPolicies::CMP0000, cmPolicies::NEW);
-  policyMap.Set(cmPolicies::CMP0003, cmPolicies::WARN);
-  policyMap.Set(cmPolicies::CMP0005, cmPolicies::OLD);
+  policyMap.Set(cmPolicies::CMP0178, cmPolicies::NEW);
+  policyMap.Set(cmPolicies::CMP0179, cmPolicies::WARN);
+  policyMap.Set(cmPolicies::CMP0180, cmPolicies::OLD);
   auto vars = cmDebugger::cmDebuggerVariablesHelper::Create(
     variablesManager, "Locals", true, policyMap);
 
@@ -84,9 +83,9 @@ static bool testCreateFromPolicyMap()
     variablesManager->HandleVariablesRequest(
       CreateVariablesRequest(vars->GetId()));
   ASSERT_TRUE(variables.size() == 3);
-  ASSERT_VARIABLE(variables[0], "CMP0000", "NEW", "string");
-  ASSERT_VARIABLE(variables[1], "CMP0003", "WARN", "string");
-  ASSERT_VARIABLE(variables[2], "CMP0005", "OLD", "string");
+  ASSERT_VARIABLE(variables[0], "CMP0178", "NEW", "string");
+  ASSERT_VARIABLE(variables[1], "CMP0179", "WARN", "string");
+  ASSERT_VARIABLE(variables[2], "CMP0180", "OLD", "string");
 
   return true;
 }
@@ -500,9 +499,10 @@ static bool testCreateFromFileSet()
 {
   auto variablesManager =
     std::make_shared<cmDebugger::cmDebuggerVariablesManager>();
+  auto dummies = CreateDummies("Foo");
 
-  cmake cm(cmake::RoleScript, cmState::Unknown);
-  cmFileSet fileSet(cm, "Foo", "HEADERS", cmFileSetVisibility::Public);
+  cmFileSet fileSet(dummies.Makefile.get(), "Foo", "HEADERS",
+                    cmFileSetVisibility::Public);
   BT<std::string> directory;
   directory.Value = "c:/";
   fileSet.AddDirectoryEntry(directory);
@@ -544,9 +544,10 @@ static bool testCreateFromFileSets()
 {
   auto variablesManager =
     std::make_shared<cmDebugger::cmDebuggerVariablesManager>();
+  auto dummies = CreateDummies("Foo");
 
-  cmake cm(cmake::RoleScript, cmState::Unknown);
-  cmFileSet fileSet(cm, "Foo", "HEADERS", cmFileSetVisibility::Public);
+  cmFileSet fileSet(dummies.Makefile.get(), "Foo", "HEADERS",
+                    cmFileSetVisibility::Public);
   BT<std::string> directory;
   directory.Value = "c:/";
   fileSet.AddDirectoryEntry(directory);

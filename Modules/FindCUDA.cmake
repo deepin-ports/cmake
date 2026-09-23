@@ -308,9 +308,11 @@ Values for ``target_CUDA_architecture``:
 Returns list of flags to be added to ``CUDA_NVCC_FLAGS`` in ``<out_variable>``.
 Additionally, sets ``<out_variable>_readable`` to the resulting numeric list.
 
-Example::
+Example:
 
-  cuda_select_nvcc_arch_flags(ARCH_FLAGS 3.0 3.5+PTX 5.2(5.0) Maxwell)
+.. code-block:: cmake
+
+  cuda_select_nvcc_arch_flags(ARCH_FLAGS "3.0" "3.5+PTX" "5.2(5.0)" "Maxwell")
   list(APPEND CUDA_NVCC_FLAGS ${ARCH_FLAGS})
 
 More info on CUDA architectures: https://en.wikipedia.org/wiki/CUDA.
@@ -582,10 +584,8 @@ endif()
 # This macro helps us find the location of helper files we will need the full path to
 macro(CUDA_FIND_HELPER_FILE _name _extension)
   set(_full_name "${_name}.${_extension}")
-  # CMAKE_CURRENT_LIST_FILE contains the full path to the file currently being
-  # processed.  Using this variable, we can pull out the current path, and
+  # Using CMAKE_CURRENT_LIST_DIR, we can pull out the current path, and
   # provide a way to get access to the other files we need local to here.
-  get_filename_component(CMAKE_CURRENT_LIST_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
   set(CUDA_${_name} "${CMAKE_CURRENT_LIST_DIR}/FindCUDA/${_full_name}")
   if(NOT EXISTS "${CUDA_${_name}}")
     set(error_message "${_full_name} not found in ${CMAKE_CURRENT_LIST_DIR}/FindCUDA")
@@ -888,28 +888,29 @@ if(NOT CUDA_TOOLKIT_ROOT_DIR AND NOT CMAKE_CROSSCOMPILING)
 endif ()
 
 if(CMAKE_CROSSCOMPILING)
-  SET (CUDA_TOOLKIT_ROOT $ENV{CUDA_TOOLKIT_ROOT})
+  set(CUDA_TOOLKIT_ROOT $ENV{CUDA_TOOLKIT_ROOT})
+  # Keep in sync with equivalent table in FindCUDAToolkit!
   if(CMAKE_SYSTEM_PROCESSOR STREQUAL "armv7-a")
     # Support for NVPACK
-    set (CUDA_TOOLKIT_TARGET_NAMES "armv7-linux-androideabi")
+    set(CUDA_TOOLKIT_TARGET_NAMES "armv7-linux-androideabi")
   elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
-    # Support for arm cross compilation
     set(CUDA_TOOLKIT_TARGET_NAMES "armv7-linux-gnueabihf")
   elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
-    # Support for aarch64 cross compilation
-    if (ANDROID_ARCH_NAME STREQUAL "arm64")
+    if(ANDROID_ARCH_NAME STREQUAL "arm64")
       set(CUDA_TOOLKIT_TARGET_NAMES "aarch64-linux-androideabi")
     elseif (CMAKE_SYSTEM_NAME STREQUAL "QNX")
       set(CUDA_TOOLKIT_TARGET_NAMES "aarch64-qnx")
     else()
       set(CUDA_TOOLKIT_TARGET_NAMES "aarch64-linux" "sbsa-linux")
-    endif (ANDROID_ARCH_NAME STREQUAL "arm64")
+    endif()
+  elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    set(CUDA_TOOLKIT_TARGET_NAMES "x86_64-linux")
   endif()
 
   foreach(CUDA_TOOLKIT_TARGET_NAME IN LISTS CUDA_TOOLKIT_TARGET_NAMES)
     if (EXISTS "${CUDA_TOOLKIT_ROOT}/targets/${CUDA_TOOLKIT_TARGET_NAME}")
       set(CUDA_TOOLKIT_TARGET_DIR "${CUDA_TOOLKIT_ROOT}/targets/${CUDA_TOOLKIT_TARGET_NAME}" CACHE PATH "CUDA Toolkit target location.")
-      SET (CUDA_TOOLKIT_ROOT_DIR ${CUDA_TOOLKIT_ROOT} CACHE PATH "Toolkit location." FORCE)
+      set(CUDA_TOOLKIT_ROOT_DIR ${CUDA_TOOLKIT_ROOT} CACHE PATH "Toolkit location." FORCE)
       mark_as_advanced(CUDA_TOOLKIT_TARGET_DIR)
       break()
     endif()
@@ -929,7 +930,7 @@ else()
   macro( cuda_find_host_program )
     find_program( ${ARGN} )
   endmacro()
-  SET (CUDA_TOOLKIT_TARGET_DIR ${CUDA_TOOLKIT_ROOT_DIR})
+  set(CUDA_TOOLKIT_TARGET_DIR ${CUDA_TOOLKIT_ROOT_DIR})
 endif()
 
 
@@ -1289,7 +1290,7 @@ set(CUDA_TOOLKIT_TARGET_DIR_INTERNAL "${CUDA_TOOLKIT_TARGET_DIR}" CACHE INTERNAL
 set(CUDA_SDK_ROOT_DIR_INTERNAL "${CUDA_SDK_ROOT_DIR}" CACHE INTERNAL
   "This is the value of the last time CUDA_SDK_ROOT_DIR was set successfully." FORCE)
 
-include(${CMAKE_CURRENT_LIST_DIR}/FindPackageHandleStandardArgs.cmake)
+include(FindPackageHandleStandardArgs)
 
 find_package_handle_standard_args(CUDA
   REQUIRED_VARS
@@ -1561,7 +1562,7 @@ macro(CUDA_WRAP_SRCS cuda_target format generated_files)
     set(CUDA_NVCC_COMPILE_DEFINITIONS "${_dir_compile_defs}")
   else()
     # Append the include directories for this target via generator expression, which is
-    # expanded by the FILE(GENERATE) call below.  This generator expression captures all
+    # expanded by the file(GENERATE) call below.  This generator expression captures all
     # include dirs set by the user, whether via directory properties or target properties
     list(APPEND CUDA_NVCC_INCLUDE_DIRS "$<TARGET_PROPERTY:${cuda_target},INCLUDE_DIRECTORIES>")
 
@@ -1622,7 +1623,7 @@ macro(CUDA_WRAP_SRCS cuda_target format generated_files)
       # nvcc chokes on -g3 in versions previous to 3.0, so replace it with -g
       set(_cuda_fix_g3 FALSE)
 
-      if(CMAKE_COMPILER_IS_GNUCC)
+      if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
         if (CUDA_VERSION VERSION_LESS  "3.0" OR
             CUDA_VERSION VERSION_EQUAL "4.1" OR
             CUDA_VERSION VERSION_EQUAL "4.2"
@@ -2007,7 +2008,7 @@ macro(CUDA_ADD_LIBRARY cuda_target)
     ${_cmake_options} ${_cuda_shared_flag}
     OPTIONS ${_options} )
 
-  # Compute the file name of the intermedate link file used for separable
+  # Compute the file name of the intermediate link file used for separable
   # compilation.
   CUDA_COMPUTE_SEPARABLE_COMPILATION_OBJECT_FILE_NAME(link_file ${cuda_target} "${${cuda_target}_SEPARABLE_COMPILATION_OBJECTS}")
 
@@ -2057,7 +2058,7 @@ macro(CUDA_ADD_EXECUTABLE cuda_target)
   # Create custom commands and targets for each file.
   CUDA_WRAP_SRCS( ${cuda_target} OBJ _generated_files ${_sources} OPTIONS ${_options} )
 
-  # Compute the file name of the intermedate link file used for separable
+  # Compute the file name of the intermediate link file used for separable
   # compilation.
   CUDA_COMPUTE_SEPARABLE_COMPILATION_OBJECT_FILE_NAME(link_file ${cuda_target} "${${cuda_target}_SEPARABLE_COMPILATION_OBJECTS}")
 

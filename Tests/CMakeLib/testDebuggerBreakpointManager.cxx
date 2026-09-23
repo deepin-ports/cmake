@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 
 #include <atomic>
 #include <chrono>
@@ -16,10 +16,11 @@
 
 #include "cmDebuggerBreakpointManager.h"
 #include "cmDebuggerSourceBreakpoint.h" // IWYU pragma: keep
-#include "cmListFileCache.h"
 
 #include "testCommon.h"
 #include "testDebugger.h"
+
+class cmListFileFunction;
 
 static bool testHandleBreakpointRequestBeforeFileIsLoaded()
 {
@@ -65,7 +66,7 @@ static bool testHandleBreakpointRequestAfterFileIsLoaded()
   // Arrange
   DebuggerTestHelper helper;
   std::atomic<bool> notExpectBreakpointEvents(true);
-  helper.Client->registerHandler([&](const dap::BreakpointEvent&) {
+  helper.Client->registerHandler([&](dap::BreakpointEvent const&) {
     notExpectBreakpointEvents.store(false);
   });
 
@@ -128,7 +129,7 @@ static bool testSourceFileLoadedAfterHandleBreakpointRequest()
   std::promise<void> allBreakpointEventsReceivedPromise;
   std::future<void> allBreakpointEventsReceivedFuture =
     allBreakpointEventsReceivedPromise.get_future();
-  helper.Client->registerHandler([&](const dap::BreakpointEvent& event) {
+  helper.Client->registerHandler([&](dap::BreakpointEvent const& event) {
     breakpointEvents.emplace_back(event);
     if (--remainingBreakpointEvents == 0) {
       allBreakpointEventsReceivedPromise.set_value();

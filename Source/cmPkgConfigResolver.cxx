@@ -1,10 +1,9 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 
 #include "cmPkgConfigResolver.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cstring>
 #include <iterator>
 #include <string>
@@ -15,7 +14,10 @@
 #include <cm/optional>
 #include <cm/string_view>
 
+#include "cmsys/String.h"
+
 #include "cmPkgConfigParser.h"
+#include "cmStringAlgorithms.h"
 
 namespace {
 
@@ -23,7 +25,7 @@ void TrimBack(std::string& str)
 {
   if (!str.empty()) {
     auto it = str.end() - 1;
-    for (; std::isspace(*it); --it) {
+    for (; cmsysString_isspace(*it); --it) {
       if (it == str.begin()) {
         str.clear();
         return;
@@ -44,20 +46,51 @@ std::string AppendAndTrim(std::string& str, cm::string_view sv)
   auto begin = str.begin() + size;
   auto cur = str.end() - 1;
 
-  while (cur != begin && std::isspace(*cur)) {
+  while (cur != begin && cmsysString_isspace(*cur)) {
     --cur;
   }
 
-  if (std::isspace(*cur)) {
+  if (cmsysString_isspace(*cur)) {
     return {};
   }
 
   return { &*begin, static_cast<std::size_t>(cur - begin) + 1 };
 }
 
+cm::string_view TrimFlag(cm::string_view flag)
+{
+  std::size_t trim_size = 2;
+  for (auto c = flag.rbegin(); c != flag.rend() && cmsysString_isspace(*c);
+       ++c) {
+    ++trim_size;
+  }
+  return { flag.data() + 2, flag.size() - trim_size };
+}
+
 } // namespace
 
-std::string cmPkgConfigResult::StrOrDefault(const std::string& key,
+std::string cmPkgConfigVersionReq::string() const
+{
+  switch (Operation) {
+    case ANY:
+      return "";
+    case LT:
+      return cmStrCat('<', Version);
+    case LT_EQ:
+      return cmStrCat("<=", Version);
+    case EQ:
+      return cmStrCat('=', Version);
+    case NEQ:
+      return cmStrCat("!=", Version);
+    case GT_EQ:
+      return cmStrCat(">=", Version);
+    case GT:
+      return cmStrCat('>', Version);
+  }
+  return "";
+}
+
+std::string cmPkgConfigResult::StrOrDefault(std::string const& key,
                                             cm::string_view def)
 {
   auto it = Keywords.find(key);
@@ -127,24 +160,24 @@ cmPkgConfigCflagsResult cmPkgConfigResult::Cflags(bool priv)
 
   auto tokens = cmPkgConfigResolver::TokenizeFlags(cflags);
 
-  if (env.AllowSysCflags) {
-    if (env.SysrootDir) {
-      return cmPkgConfigResolver::MangleCflags(tokens, *env.SysrootDir);
+  if (env->AllowSysCflags) {
+    if (env->SysrootDir) {
+      return cmPkgConfigResolver::MangleCflags(tokens, *env->SysrootDir);
     }
     return cmPkgConfigResolver::MangleCflags(tokens);
   }
 
-  if (env.SysCflags) {
-    if (env.SysrootDir) {
-      return cmPkgConfigResolver::MangleCflags(tokens, *env.SysrootDir,
-                                               *env.SysCflags);
+  if (env->SysCflags) {
+    if (env->SysrootDir) {
+      return cmPkgConfigResolver::MangleCflags(tokens, *env->SysrootDir,
+                                               *env->SysCflags);
     }
-    return cmPkgConfigResolver::MangleCflags(tokens, *env.SysCflags);
+    return cmPkgConfigResolver::MangleCflags(tokens, *env->SysCflags);
   }
 
-  if (env.SysrootDir) {
+  if (env->SysrootDir) {
     return cmPkgConfigResolver::MangleCflags(
-      tokens, *env.SysrootDir, std::vector<std::string>{ "/usr/include" });
+      tokens, *env->SysrootDir, std::vector<std::string>{ "/usr/include" });
   }
 
   return cmPkgConfigResolver::MangleCflags(
@@ -160,24 +193,24 @@ cmPkgConfigLibsResult cmPkgConfigResult::Libs(bool priv)
 
   auto tokens = cmPkgConfigResolver::TokenizeFlags(it->second);
 
-  if (env.AllowSysLibs) {
-    if (env.SysrootDir) {
-      return cmPkgConfigResolver::MangleLibs(tokens, *env.SysrootDir);
+  if (env->AllowSysLibs) {
+    if (env->SysrootDir) {
+      return cmPkgConfigResolver::MangleLibs(tokens, *env->SysrootDir);
     }
     return cmPkgConfigResolver::MangleLibs(tokens);
   }
 
-  if (env.SysLibs) {
-    if (env.SysrootDir) {
-      return cmPkgConfigResolver::MangleLibs(tokens, *env.SysrootDir,
-                                             *env.SysLibs);
+  if (env->SysLibs) {
+    if (env->SysrootDir) {
+      return cmPkgConfigResolver::MangleLibs(tokens, *env->SysrootDir,
+                                             *env->SysLibs);
     }
-    return cmPkgConfigResolver::MangleLibs(tokens, *env.SysLibs);
+    return cmPkgConfigResolver::MangleLibs(tokens, *env->SysLibs);
   }
 
-  if (env.SysrootDir) {
+  if (env->SysrootDir) {
     return cmPkgConfigResolver::MangleLibs(
-      tokens, *env.SysrootDir, std::vector<std::string>{ "/usr/lib" });
+      tokens, *env->SysrootDir, std::vector<std::string>{ "/usr/lib" });
   }
 
   return cmPkgConfigResolver::MangleLibs(
@@ -194,7 +227,7 @@ void cmPkgConfigResolver::ReplaceSep(std::string& list)
 }
 
 cm::optional<cmPkgConfigResult> cmPkgConfigResolver::ResolveStrict(
-  const std::vector<cmPkgConfigEntry>& entries, cmPkgConfigEnv env)
+  std::vector<cmPkgConfigEntry> const& entries, cmPkgConfigEnv env)
 {
   cm::optional<cmPkgConfigResult> result;
   cmPkgConfigResult config;
@@ -210,9 +243,9 @@ cm::optional<cmPkgConfigResult> cmPkgConfigResolver::ResolveStrict(
     config.Variables["pc_top_builddir"] = *env.TopBuildDir;
   }
 
-  config.env = std::move(env);
+  config.env = &env;
 
-  for (const auto& entry : entries) {
+  for (auto const& entry : entries) {
     std::string key(entry.Key);
     if (entry.IsVariable) {
       if (config.Variables.find(key) != config.Variables.end()) {
@@ -256,12 +289,12 @@ cm::optional<cmPkgConfigResult> cmPkgConfigResolver::ResolveStrict(
 }
 
 cm::optional<cmPkgConfigResult> cmPkgConfigResolver::ResolvePermissive(
-  const std::vector<cmPkgConfigEntry>& entries, cmPkgConfigEnv env)
+  std::vector<cmPkgConfigEntry> const& entries, cmPkgConfigEnv env)
 {
   cm::optional<cmPkgConfigResult> result;
 
   cmPkgConfigResult config = ResolveBestEffort(entries, std::move(env));
-  const auto& keys = config.Keywords;
+  auto const& keys = config.Keywords;
 
   if (keys.find("Name") == keys.end() ||
       keys.find("Description") == keys.end() ||
@@ -274,7 +307,7 @@ cm::optional<cmPkgConfigResult> cmPkgConfigResolver::ResolvePermissive(
 }
 
 cmPkgConfigResult cmPkgConfigResolver::ResolveBestEffort(
-  const std::vector<cmPkgConfigEntry>& entries, cmPkgConfigEnv env)
+  std::vector<cmPkgConfigEntry> const& entries, cmPkgConfigEnv env)
 {
   cmPkgConfigResult result;
 
@@ -288,9 +321,9 @@ cmPkgConfigResult cmPkgConfigResolver::ResolveBestEffort(
     result.Variables["pc_top_builddir"] = *env.TopBuildDir;
   }
 
-  result.env = std::move(env);
+  result.env = &env;
 
-  for (const auto& entry : entries) {
+  for (auto const& entry : entries) {
     std::string key(entry.Key);
     if (entry.IsVariable) {
       result.Variables[key] =
@@ -303,11 +336,11 @@ cmPkgConfigResult cmPkgConfigResolver::ResolveBestEffort(
 }
 
 std::string cmPkgConfigResolver::HandleVariablePermissive(
-  const cmPkgConfigEntry& entry,
-  const std::unordered_map<std::string, std::string>& variables)
+  cmPkgConfigEntry const& entry,
+  std::unordered_map<std::string, std::string> const& variables)
 {
   std::string result;
-  for (const auto& segment : entry.Val) {
+  for (auto const& segment : entry.Val) {
     if (!segment.IsVariable) {
       result += segment.Data;
     } else if (entry.Key != segment.Data) {
@@ -323,13 +356,13 @@ std::string cmPkgConfigResolver::HandleVariablePermissive(
 }
 
 cm::optional<std::string> cmPkgConfigResolver::HandleVariableStrict(
-  const cmPkgConfigEntry& entry,
-  const std::unordered_map<std::string, std::string>& variables)
+  cmPkgConfigEntry const& entry,
+  std::unordered_map<std::string, std::string> const& variables)
 {
   cm::optional<std::string> result;
 
   std::string value;
-  for (const auto& segment : entry.Val) {
+  for (auto const& segment : entry.Val) {
     if (!segment.IsVariable) {
       value += segment.Data;
     } else if (entry.Key == segment.Data) {
@@ -350,11 +383,11 @@ cm::optional<std::string> cmPkgConfigResolver::HandleVariableStrict(
 }
 
 std::string cmPkgConfigResolver::HandleKeyword(
-  const cmPkgConfigEntry& entry,
-  const std::unordered_map<std::string, std::string>& variables)
+  cmPkgConfigEntry const& entry,
+  std::unordered_map<std::string, std::string> const& variables)
 {
   std::string result;
-  for (const auto& segment : entry.Val) {
+  for (auto const& segment : entry.Val) {
     if (!segment.IsVariable) {
       result += segment.Data;
     } else {
@@ -370,24 +403,24 @@ std::string cmPkgConfigResolver::HandleKeyword(
 }
 
 std::vector<cm::string_view> cmPkgConfigResolver::TokenizeFlags(
-  const std::string& flagline)
+  std::string const& flagline)
 {
   std::vector<cm::string_view> result;
 
   auto it = flagline.begin();
-  while (it != flagline.end() && std::isspace(*it)) {
+  while (it != flagline.end() && cmsysString_isspace(*it)) {
     ++it;
   }
 
   while (it != flagline.end()) {
-    const char* start = &(*it);
+    char const* start = &(*it);
     std::size_t len = 0;
 
-    for (; it != flagline.end() && !std::isspace(*it); ++it) {
+    for (; it != flagline.end() && !cmsysString_isspace(*it); ++it) {
       ++len;
     }
 
-    for (; it != flagline.end() && std::isspace(*it); ++it) {
+    for (; it != flagline.end() && cmsysString_isspace(*it); ++it) {
       ++len;
     }
 
@@ -398,7 +431,7 @@ std::vector<cm::string_view> cmPkgConfigResolver::TokenizeFlags(
 }
 
 cmPkgConfigCflagsResult cmPkgConfigResolver::MangleCflags(
-  const std::vector<cm::string_view>& flags)
+  std::vector<cm::string_view> const& flags)
 {
   cmPkgConfigCflagsResult result;
 
@@ -414,7 +447,7 @@ cmPkgConfigCflagsResult cmPkgConfigResolver::MangleCflags(
 }
 
 cmPkgConfigCflagsResult cmPkgConfigResolver::MangleCflags(
-  const std::vector<cm::string_view>& flags, const std::string& sysroot)
+  std::vector<cm::string_view> const& flags, std::string const& sysroot)
 {
   cmPkgConfigCflagsResult result;
 
@@ -431,19 +464,17 @@ cmPkgConfigCflagsResult cmPkgConfigResolver::MangleCflags(
 }
 
 cmPkgConfigCflagsResult cmPkgConfigResolver::MangleCflags(
-  const std::vector<cm::string_view>& flags,
-  const std::vector<std::string>& syspaths)
+  std::vector<cm::string_view> const& flags,
+  std::vector<std::string> const& syspaths)
 {
   cmPkgConfigCflagsResult result;
 
   for (auto flag : flags) {
     if (flag.rfind("-I", 0) == 0) {
-      cm::string_view noprefix{ flag.data() + 2, flag.size() - 2 };
-
-      if (std::all_of(syspaths.begin(), syspaths.end(),
-                      [&](const std::string& path) {
-                        return noprefix.rfind(path, 0) == noprefix.npos;
-                      })) {
+      cm::string_view trimmed = TrimFlag(flag);
+      if (std::all_of(
+            syspaths.begin(), syspaths.end(),
+            [&](std::string const& path) { return path != trimmed; })) {
         result.Includes.emplace_back(AppendAndTrim(result.Flagline, flag));
       }
 
@@ -456,20 +487,18 @@ cmPkgConfigCflagsResult cmPkgConfigResolver::MangleCflags(
 }
 
 cmPkgConfigCflagsResult cmPkgConfigResolver::MangleCflags(
-  const std::vector<cm::string_view>& flags, const std::string& sysroot,
-  const std::vector<std::string>& syspaths)
+  std::vector<cm::string_view> const& flags, std::string const& sysroot,
+  std::vector<std::string> const& syspaths)
 {
   cmPkgConfigCflagsResult result;
 
   for (auto flag : flags) {
     if (flag.rfind("-I", 0) == 0) {
       std::string reroot = Reroot(flag, "-I", sysroot);
-      cm::string_view noprefix{ reroot.data() + 2, reroot.size() - 2 };
-
-      if (std::all_of(syspaths.begin(), syspaths.end(),
-                      [&](const std::string& path) {
-                        return noprefix.rfind(path, 0) == noprefix.npos;
-                      })) {
+      cm::string_view trimmed = TrimFlag(reroot);
+      if (std::all_of(
+            syspaths.begin(), syspaths.end(),
+            [&](std::string const& path) { return path != trimmed; })) {
         result.Includes.emplace_back(AppendAndTrim(result.Flagline, reroot));
       }
 
@@ -482,7 +511,7 @@ cmPkgConfigCflagsResult cmPkgConfigResolver::MangleCflags(
 }
 
 cmPkgConfigLibsResult cmPkgConfigResolver::MangleLibs(
-  const std::vector<cm::string_view>& flags)
+  std::vector<cm::string_view> const& flags)
 {
   cmPkgConfigLibsResult result;
 
@@ -500,7 +529,7 @@ cmPkgConfigLibsResult cmPkgConfigResolver::MangleLibs(
 }
 
 cmPkgConfigLibsResult cmPkgConfigResolver::MangleLibs(
-  const std::vector<cm::string_view>& flags, const std::string& sysroot)
+  std::vector<cm::string_view> const& flags, std::string const& sysroot)
 {
   cmPkgConfigLibsResult result;
 
@@ -519,19 +548,17 @@ cmPkgConfigLibsResult cmPkgConfigResolver::MangleLibs(
 }
 
 cmPkgConfigLibsResult cmPkgConfigResolver::MangleLibs(
-  const std::vector<cm::string_view>& flags,
-  const std::vector<std::string>& syspaths)
+  std::vector<cm::string_view> const& flags,
+  std::vector<std::string> const& syspaths)
 {
   cmPkgConfigLibsResult result;
 
   for (auto flag : flags) {
     if (flag.rfind("-L", 0) == 0) {
-      cm::string_view noprefix{ flag.data() + 2, flag.size() - 2 };
-
-      if (std::all_of(syspaths.begin(), syspaths.end(),
-                      [&](const std::string& path) {
-                        return noprefix.rfind(path, 0) == noprefix.npos;
-                      })) {
+      cm::string_view trimmed = TrimFlag(flag);
+      if (std::all_of(
+            syspaths.begin(), syspaths.end(),
+            [&](std::string const& path) { return path != trimmed; })) {
         result.LibDirs.emplace_back(AppendAndTrim(result.Flagline, flag));
       }
 
@@ -546,20 +573,18 @@ cmPkgConfigLibsResult cmPkgConfigResolver::MangleLibs(
 }
 
 cmPkgConfigLibsResult cmPkgConfigResolver::MangleLibs(
-  const std::vector<cm::string_view>& flags, const std::string& sysroot,
-  const std::vector<std::string>& syspaths)
+  std::vector<cm::string_view> const& flags, std::string const& sysroot,
+  std::vector<std::string> const& syspaths)
 {
   cmPkgConfigLibsResult result;
 
   for (auto flag : flags) {
     if (flag.rfind("-L", 0) == 0) {
       std::string reroot = Reroot(flag, "-L", sysroot);
-      cm::string_view noprefix{ reroot.data() + 2, reroot.size() - 2 };
-
-      if (std::all_of(syspaths.begin(), syspaths.end(),
-                      [&](const std::string& path) {
-                        return noprefix.rfind(path, 0) == noprefix.npos;
-                      })) {
+      cm::string_view trimmed = TrimFlag(reroot);
+      if (std::all_of(
+            syspaths.begin(), syspaths.end(),
+            [&](std::string const& path) { return path != trimmed; })) {
         result.LibDirs.emplace_back(AppendAndTrim(result.Flagline, reroot));
       }
 
@@ -575,7 +600,7 @@ cmPkgConfigLibsResult cmPkgConfigResolver::MangleLibs(
 
 std::string cmPkgConfigResolver::Reroot(cm::string_view flag,
                                         cm::string_view prefix,
-                                        const std::string& sysroot)
+                                        std::string const& sysroot)
 {
   std::string result = std::string{ prefix };
   result += sysroot;
@@ -642,12 +667,12 @@ cmPkgConfigVersionReq cmPkgConfigResolver::ParseVersion(
       return result;
     }
 
-    if (!std::isspace(*cur)) {
+    if (!cmsysString_isspace(*cur)) {
       break;
     }
   }
 
-  for (; cur != end && !std::isspace(*cur) && *cur != ','; ++cur) {
+  for (; cur != end && !cmsysString_isspace(*cur) && *cur != ','; ++cur) {
     result.Version += *cur;
   }
 
@@ -655,7 +680,7 @@ cmPkgConfigVersionReq cmPkgConfigResolver::ParseVersion(
 }
 
 std::vector<cmPkgConfigDependency> cmPkgConfigResolver::ParseDependencies(
-  const std::string& deps)
+  std::string const& deps)
 {
 
   std::vector<cmPkgConfigDependency> result;
@@ -664,7 +689,7 @@ std::vector<cmPkgConfigDependency> cmPkgConfigResolver::ParseDependencies(
   auto end = deps.end();
 
   while (cur != end) {
-    while ((std::isspace(*cur) || *cur == ',')) {
+    while ((cmsysString_isspace(*cur) || *cur == ',')) {
       if (++cur == end) {
         return result;
       }
@@ -673,7 +698,7 @@ std::vector<cmPkgConfigDependency> cmPkgConfigResolver::ParseDependencies(
     result.emplace_back();
     auto& dep = result.back();
 
-    while (!std::isspace(*cur) && *cur != ',') {
+    while (!cmsysString_isspace(*cur) && *cur != ',') {
       dep.Name += *cur;
       if (++cur == end) {
         return result;
@@ -690,7 +715,7 @@ std::vector<cmPkgConfigDependency> cmPkgConfigResolver::ParseDependencies(
           return true;
         }
 
-        if (!std::isspace(*cur)) {
+        if (!cmsysString_isspace(*cur)) {
           return false;
         }
       }
@@ -706,8 +731,8 @@ std::vector<cmPkgConfigDependency> cmPkgConfigResolver::ParseDependencies(
   return result;
 }
 
-bool cmPkgConfigResolver::CheckVersion(const cmPkgConfigVersionReq& desired,
-                                       const std::string& provided)
+bool cmPkgConfigResolver::CheckVersion(cmPkgConfigVersionReq const& desired,
+                                       std::string const& provided)
 {
 
   if (desired.Operation == cmPkgConfigVersionReq::ANY) {
@@ -746,11 +771,11 @@ bool cmPkgConfigResolver::CheckVersion(const cmPkgConfigVersionReq& desired,
   auto b_end = provided.end();
 
   while (a_cur != a_end && b_cur != b_end) {
-    while (a_cur != a_end && !std::isalnum(*a_cur) && *a_cur != '~') {
+    while (a_cur != a_end && !cmsysString_isalnum(*a_cur) && *a_cur != '~') {
       ++a_cur;
     }
 
-    while (b_cur != b_end && !std::isalnum(*b_cur) && *b_cur != '~') {
+    while (b_cur != b_end && !cmsysString_isalnum(*b_cur) && *b_cur != '~') {
       ++b_cur;
     }
 
@@ -776,23 +801,23 @@ bool cmPkgConfigResolver::CheckVersion(const cmPkgConfigVersionReq& desired,
     auto b_seg = b_cur;
     bool is_num;
 
-    if (std::isdigit(*a_cur)) {
+    if (cmsysString_isdigit(*a_cur)) {
       is_num = true;
-      while (a_cur != a_end && std::isdigit(*a_cur)) {
+      while (a_cur != a_end && cmsysString_isdigit(*a_cur)) {
         ++a_cur;
       }
 
-      while (b_cur != b_end && std::isdigit(*b_cur)) {
+      while (b_cur != b_end && cmsysString_isdigit(*b_cur)) {
         ++b_cur;
       }
 
     } else {
       is_num = false;
-      while (a_cur != a_end && std::isalpha(*a_cur)) {
+      while (a_cur != a_end && cmsysString_isalpha(*a_cur)) {
         ++a_cur;
       }
 
-      while (b_cur != b_end && std::isalpha(*b_cur)) {
+      while (b_cur != b_end && cmsysString_isalpha(*b_cur)) {
         ++b_cur;
       }
     }
@@ -847,7 +872,7 @@ bool cmPkgConfigResolver::CheckVersion(const cmPkgConfigVersionReq& desired,
 }
 
 cmPkgConfigVersionReq cmPkgConfigResolver::ParseVersion(
-  const std::string& version)
+  std::string const& version)
 {
   cmPkgConfigVersionReq result;
 

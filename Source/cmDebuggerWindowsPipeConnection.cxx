@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmDebuggerWindowsPipeConnection.h"
 
 #include <algorithm>
@@ -7,6 +7,8 @@
 #include <cstring>
 #include <stdexcept>
 #include <utility>
+
+#include "cmStringAlgorithms.h"
 
 namespace cmDebugger {
 
@@ -131,8 +133,8 @@ std::string cmDebuggerPipeConnection_WIN32::GetErrorMessage(DWORD errorCode)
       FORMAT_MESSAGE_IGNORE_INSERTS,
     nullptr, errorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
     (LPSTR)&message, 0, nullptr);
-  std::string errorMessage = "Internal Error with " + this->PipeName + ": " +
-    std::string(message, size);
+  std::string errorMessage = cmStrCat("Internal Error with ", this->PipeName,
+                                      ": ", std::string(message, size));
   LocalFree(message);
   return errorMessage;
 }
@@ -238,7 +240,7 @@ std::string cmDebuggerPipeClient_WIN32::GetErrorMessage(DWORD errorCode)
     nullptr, errorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
     (LPSTR)&message, 0, nullptr);
   std::string errorMessage =
-    this->PipeName + ": " + std::string(message, size);
+    cmStrCat(this->PipeName, ": ", std::string(message, size));
   LocalFree(message);
   return errorMessage;
 }

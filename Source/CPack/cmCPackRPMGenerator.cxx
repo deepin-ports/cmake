@@ -1,13 +1,14 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmCPackRPMGenerator.h"
 
 #include <algorithm>
-#include <cctype>
 #include <map>
 #include <ostream>
 #include <utility>
 #include <vector>
+
+#include "cmsys/String.h"
 
 #include "cmCPackComponentGroup.h"
 #include "cmCPackGenerator.h"
@@ -49,7 +50,7 @@ void cmCPackRPMGenerator::AddGeneratedPackageNames()
 {
   // add the generated packages to package file names list
   std::string fileNames(this->GetOption("GEN_CPACK_OUTPUT_FILES"));
-  const char sep = ';';
+  char const sep = ';';
   std::string::size_type pos1 = 0;
   std::string::size_type pos2 = fileNames.find(sep, pos1 + 1);
   while (pos2 != std::string::npos) {
@@ -107,7 +108,7 @@ int cmCPackRPMGenerator::PackageOnePack(std::string const& initialToplevel,
 }
 
 std::string cmCPackRPMGenerator::GetSanitizedDirOrFileName(
-  const std::string& name, bool isFullName) const
+  std::string const& name, bool isFullName) const
 {
   auto sanitizedName =
     this->cmCPackGenerator::GetSanitizedDirOrFileName(name, isFullName);
@@ -143,7 +144,7 @@ int cmCPackRPMGenerator::PackageComponents(bool ignoreGroup)
            ++compIt) {
         std::string component(compIt->first);
         std::transform(component.begin(), component.end(), component.begin(),
-                       ::toupper);
+                       cmsysString_toupper);
 
         if (this->IsOn("CPACK_RPM_" + compIt->first + "_DEBUGINFO_PACKAGE") ||
             this->IsOn("CPACK_RPM_" + component + "_DEBUGINFO_PACKAGE")) {
@@ -157,7 +158,7 @@ int cmCPackRPMGenerator::PackageComponents(bool ignoreGroup)
            compGIt != this->ComponentGroups.end(); ++compGIt) {
         std::string component(compGIt->first);
         std::transform(component.begin(), component.end(), component.begin(),
-                       ::toupper);
+                       cmsysString_toupper);
 
         if (this->IsOn("CPACK_RPM_" + compGIt->first + "_DEBUGINFO_PACKAGE") ||
             this->IsOn("CPACK_RPM_" + component + "_DEBUGINFO_PACKAGE")) {
@@ -174,7 +175,7 @@ int cmCPackRPMGenerator::PackageComponents(bool ignoreGroup)
           if (!compIt->second.Group) {
             std::string component(compIt->first);
             std::transform(component.begin(), component.end(),
-                           component.begin(), ::toupper);
+                           component.begin(), cmsysString_toupper);
 
             if (this->IsOn("CPACK_RPM_" + compIt->first +
                            "_DEBUGINFO_PACKAGE") ||
@@ -206,7 +207,7 @@ int cmCPackRPMGenerator::PackageComponents(bool ignoreGroup)
 
     std::string mainComponentUpper(mainComponent);
     std::transform(mainComponentUpper.begin(), mainComponentUpper.end(),
-                   mainComponentUpper.begin(), ::toupper);
+                   mainComponentUpper.begin(), cmsysString_toupper);
 
     // The default behavior is to have one package by component group
     // unless CPACK_COMPONENTS_IGNORE_GROUP is specified.
@@ -218,7 +219,7 @@ int cmCPackRPMGenerator::PackageComponents(bool ignoreGroup)
            compGIt != this->ComponentGroups.end(); ++compGIt) {
         std::string component(compGIt->first);
         std::transform(component.begin(), component.end(), component.begin(),
-                       ::toupper);
+                       cmsysString_toupper);
 
         if (mainComponentUpper == component) {
           // main component will be handled last
@@ -240,7 +241,7 @@ int cmCPackRPMGenerator::PackageComponents(bool ignoreGroup)
         if (!compIt->second.Group) {
           std::string component(compIt->first);
           std::transform(component.begin(), component.end(), component.begin(),
-                         ::toupper);
+                         cmsysString_toupper);
 
           if (mainComponentUpper == component) {
             // main component will be handled last
@@ -283,7 +284,7 @@ int cmCPackRPMGenerator::PackageComponents(bool ignoreGroup)
            ++compIt) {
         std::string component(compIt->first);
         std::transform(component.begin(), component.end(), component.begin(),
-                       ::toupper);
+                       cmsysString_toupper);
 
         if (mainComponentUpper == component) {
           // main component will be handled last
@@ -363,7 +364,7 @@ int cmCPackRPMGenerator::PackageComponents(bool ignoreGroup)
 }
 
 int cmCPackRPMGenerator::PackageComponentsAllInOne(
-  const std::string& compInstDirName)
+  std::string const& compInstDirName)
 {
   int retval = 1;
   /* Reset package file name list it will be populated during the
@@ -445,7 +446,7 @@ bool cmCPackRPMGenerator::SupportsComponentInstallation() const
 }
 
 std::string cmCPackRPMGenerator::GetComponentInstallSuffix(
-  const std::string& componentName)
+  std::string const& componentName)
 {
   if (this->componentPackageMethod == ONE_PACKAGE_PER_COMPONENT) {
     return componentName;
@@ -458,14 +459,14 @@ std::string cmCPackRPMGenerator::GetComponentInstallSuffix(
   // the current COMPONENT belongs to.
   std::string groupVar =
     "CPACK_COMPONENT_" + cmSystemTools::UpperCase(componentName) + "_GROUP";
-  if (this->GetOption(groupVar)) {
-    return *this->GetOption(groupVar);
+  if (cmValue v = this->GetOption(groupVar)) {
+    return *v;
   }
   return componentName;
 }
 
 std::string cmCPackRPMGenerator::GetComponentInstallDirNameSuffix(
-  const std::string& componentName)
+  std::string const& componentName)
 {
   return this->GetSanitizedDirOrFileName(
     this->GetComponentInstallSuffix(componentName));

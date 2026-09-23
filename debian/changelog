@@ -1,8 +1,236 @@
-cmake (3.31.4-2deepin1) unstable; urgency=medium
+cmake (4.3.4-1) unstable; urgency=medium
 
-  * feat: add sw64 support.
+  * New upstream version 4.3.4
+  * Refresh patch (no functional changes)
+  * Migrate to debhelper 14
 
- -- hudeng <hudeng@deepin.org>  Thu, 29 May 2025 11:27:27 +0800
+ -- Timo Röhling <roehling@debian.org>  Mon, 22 Jun 2026 20:33:09 +0200
+
+cmake (4.3.3-1) unstable; urgency=medium
+
+  * Use the uscan directory recursion to make old CMake releases
+    downloadable.
+  * Avoid explicitly specifying -Wl,--as-needed linker flag.
+  * Set upstream metadata fields: Bug-Database, Bug-Submit, Repository,
+    Repository-Browse.
+  * New upstream version 4.3.3
+
+ -- Timo Röhling <roehling@debian.org>  Thu, 28 May 2026 10:33:23 +0200
+
+cmake (4.3.2-1) unstable; urgency=medium
+
+  * Fix indentation in d/control
+  * Add M-A: foreign hint to cmake-data
+  * Delete obsolete d/clean
+  * New upstream version 4.3.2
+
+ -- Timo Röhling <roehling@debian.org>  Sat, 25 Apr 2026 11:06:44 +0200
+
+cmake (4.3.1-1) unstable; urgency=medium
+
+  * New upstream version 4.3.1
+  * Bump Standards-Version to 4.7.4
+
+ -- Timo Röhling <roehling@debian.org>  Tue, 31 Mar 2026 16:31:23 +0200
+
+cmake (4.3.0-3) unstable; urgency=medium
+
+  * Fix autopkgtest regression on i386 due to bad test exclusion
+
+ -- Timo Röhling <roehling@debian.org>  Tue, 24 Mar 2026 11:43:54 +0100
+
+cmake (4.3.0-2) unstable; urgency=medium
+
+  * Drop erroneous dependency on cmake-data transitional package
+
+ -- Timo Röhling <roehling@debian.org>  Sun, 22 Mar 2026 21:48:48 +0100
+
+cmake (4.3.0-1) unstable; urgency=medium
+
+  * New upstream version 4.3.0
+  * Update patches
+    - Obsolete: 0002-Allow-in-build-path-for-RunCMake.CommandLine.D-tilde.patch
+  * Skip RunCMake.CommandLineTar test on 32-bit architectures
+
+ -- Timo Röhling <roehling@debian.org>  Sat, 21 Mar 2026 14:53:25 +0100
+
+cmake (4.3.0~rc3-1) experimental; urgency=medium
+
+  [ Gianfranco Costamagna ]
+  * Edit changelog, drop duplicated entries added by mistake
+    in 6b0ed18677b289d0402ccbcd334881a19cb2c8dc
+
+  [ Timo Röhling ]
+  * New upstream version 4.3.0~rc3
+  * Merge cmake-data into cmake package (Closes: #1127477)
+  * Update patches
+    - Merged: 0002-FindBoost-Add-support-for-Boost-1.89-and-1.90.patch
+  * Allow '~' in build path for RunCMake.CommandLine.D-tilde
+
+ -- Timo Röhling <roehling@debian.org>  Fri, 13 Mar 2026 13:08:01 +0100
+
+cmake (4.2.3-2) unstable; urgency=medium
+
+  * Add support for Boost 1.89 and Boost 1.90 (Closes: #1127476)
+
+ -- Timo Röhling <roehling@debian.org>  Tue, 10 Feb 2026 17:12:40 +0100
+
+cmake (4.2.3-1) unstable; urgency=medium
+
+  * New upstream version 4.2.3
+
+ -- Timo Röhling <roehling@debian.org>  Thu, 29 Jan 2026 09:31:33 +0100
+
+cmake (4.2.2-2) unstable; urgency=medium
+
+  * Skip Timestamp2038 on i386 (no 64-bit time) (Closes: #1126187)
+
+ -- Timo Röhling <roehling@debian.org>  Fri, 23 Jan 2026 11:10:36 +0100
+
+cmake (4.2.2-1) unstable; urgency=medium
+
+  * New upstream version 4.2.2
+
+ -- Timo Röhling <roehling@debian.org>  Thu, 22 Jan 2026 13:27:56 +0100
+
+cmake (4.2.1-2) unstable; urgency=medium
+
+  * Upload to unstable.
+  * Bump Standards-Version to 4.7.3
+
+ -- Timo Röhling <roehling@debian.org>  Wed, 14 Jan 2026 23:24:53 +0100
+
+cmake (4.2.1-1) experimental; urgency=medium
+
+  * New upstream version 4.2.1
+
+ -- Timo Röhling <roehling@debian.org>  Tue, 09 Dec 2025 15:26:33 +0100
+
+cmake (4.2.0-2) experimental; urgency=medium
+
+  * Skip failing tests on *-i386
+
+ -- Timo Röhling <roehling@debian.org>  Thu, 27 Nov 2025 15:29:47 +0100
+
+cmake (4.2.0-1) experimental; urgency=medium
+
+  * New upstream version 4.2.0
+  * Update patches
+    - Merged: 0002-Allow-host-prefix-for-GNU-as-in-test-suite.patch
+
+ -- Timo Röhling <roehling@debian.org>  Mon, 24 Nov 2025 15:00:31 +0100
+
+cmake (4.1.2-1) experimental; urgency=medium
+
+  * Simplify autopkgtest
+  * Disable reprotest which fails due to insufficient disk space
+  * New upstream version 4.1.2
+    - Fix GNUInstallDirs Multi-Arch path regression (Closes: #1114681)
+  * Update patches.
+    - Merged: 0002-Fix-FTBFS-with-curl-8.16.patch
+
+ -- Timo Röhling <roehling@debian.org>  Wed, 01 Oct 2025 15:18:27 +0200
+
+cmake (4.1.1+really4.1.1-1) experimental; urgency=medium
+
+  * Reintroduce CMake 4 to experimental
+
+ -- Timo Röhling <roehling@debian.org>  Mon, 01 Sep 2025 12:20:57 +0200
+
+cmake (4.1.1+really3.31.6-2) unstable; urgency=medium
+
+  * Allow host prefix for GNU as (Closes: #1115461)
+  * Prevent test suite failures if a '+' is in the source path
+
+ -- Timo Röhling <roehling@debian.org>  Wed, 17 Sep 2025 16:13:35 +0200
+
+cmake (4.1.1+really3.31.6-1) unstable; urgency=medium
+
+  * New upstream version 4.1.1+really3.31.6
+  * Revert to cmake 3.31.6 temporarily to avoid widespread
+    disruption.
+
+ -- Timo Röhling <roehling@debian.org>  Mon, 01 Sep 2025 11:14:57 +0200
+
+cmake (4.1.1-2) unstable; urgency=medium
+
+  * Upload to unstable.
+
+ -- Timo Röhling <roehling@debian.org>  Mon, 01 Sep 2025 00:52:32 +0200
+
+cmake (4.1.1-1) experimental; urgency=medium
+
+  * Migrate debian/watch to version 5 format
+  * New upstream version 4.1.1
+  * Fix FTBFS with curl 8.16+
+
+ -- Timo Röhling <roehling@debian.org>  Fri, 29 Aug 2025 12:06:15 +0200
+
+cmake (4.1.0-1) experimental; urgency=medium
+
+  * New upstream version 4.1.0
+    - Add version 1.88 to legacy FindBoost module (Closes: #1110543)
+  * Refresh patches (no functional changes)
+
+ -- Timo Röhling <roehling@debian.org>  Tue, 12 Aug 2025 10:17:22 +0200
+
+cmake (4.0.3-1) experimental; urgency=medium
+
+  * New upstream version 4.0.3
+  * Refresh patches (no functional changes)
+
+ -- Timo Röhling <roehling@debian.org>  Tue, 17 Jun 2025 15:11:02 +0200
+
+cmake (4.0.2-1) experimental; urgency=medium
+
+  * New upstream version 4.0.2
+  * Refresh patches (no functional changes)
+
+ -- Timo Röhling <roehling@debian.org>  Sat, 10 May 2025 22:07:18 +0200
+
+cmake (4.0.1-1) experimental; urgency=medium
+
+  * New upstream version 4.0.1
+
+ -- Timo Röhling <roehling@debian.org>  Fri, 11 Apr 2025 11:37:59 +0200
+
+cmake (4.0.0-1) experimental; urgency=medium
+
+  * New upstream version 4.0.0
+  * Update patches
+    - Drop 0002-Avoid-using-undocumented-type-for-CURLOPT_NETRC-valu.patch
+      (applied upstream)
+  * Bump Standards-Version to 4.7.2
+  * Sanitize test environment
+  * Install new manpage but skip duplicate LICENSES
+  * Update d/copyright
+
+ -- Timo Röhling <roehling@debian.org>  Fri, 04 Apr 2025 10:55:16 +0200
+
+cmake (3.31.6-2) unstable; urgency=medium
+
+  * Avoid using undocumented type fo CURLOPT_NETRC values (Closes: #1101604)
+
+ -- Timo Röhling <roehling@debian.org>  Mon, 31 Mar 2025 16:09:14 +0200
+
+cmake (3.31.6-1) unstable; urgency=medium
+
+  * New upstream version 3.31.6
+  * Bump Standards-Version to 4.7.1
+
+ -- Timo Röhling <roehling@debian.org>  Tue, 25 Feb 2025 09:21:18 +0100
+
+cmake (3.31.5-2) unstable; urgency=medium
+
+  * Migrate cmake-qt-gui to Qt 6
+
+ -- Timo Röhling <roehling@debian.org>  Sat, 08 Feb 2025 21:57:44 +0100
+
+cmake (3.31.5-1) unstable; urgency=medium
+
+  * New upstream version 3.31.5
+
+ -- Timo Röhling <roehling@debian.org>  Tue, 28 Jan 2025 10:48:06 +0100
 
 cmake (3.31.4-2) unstable; urgency=medium
 
@@ -2148,151 +2376,6 @@ cmake (2.0.6-1) unstable; urgency=low
   * g++ 4.0 Transition
 
  -- A. Maitland Bottoms <bottoms@debian.org>  Sun, 11 Sep 2005 14:51:36 -0400
-
-cmake (2.0.5-1) unstable; urgency=low
-
-  * New upstream release
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Wed,  2 Mar 2005 09:22:44 -0500
-
-cmake (2.0.3-1) unstable; urgency=low
-
-  * New upstream release
-  * finds QT's moc, gets bug closing syntax right (Closes: #250000)
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Thu, 12 Aug 2004 09:21:32 -0400
-
-cmake (2.0.2-1) unstable; urgency=low
-
-  * New upstream release
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Wed, 23 Jun 2004 13:51:38 -0400
-
-cmake (2.0.1-1) unstable; urgency=low
-
-  * New upstream release with soname and soversion support
-  * find QT's moc (Closes: 250000)
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Mon,  7 Jun 2004 22:08:50 -0400
-
-cmake (1.8.2.1-1) unstable; urgency=low
-
-  * From CVS to pick up soname and soversion support
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Wed, 26 Nov 2003 21:46:54 -0500
-
-cmake (1.8.1-1) unstable; urgency=low
-
-  * New upstream release
-  * Add Gavin Baker's Take II on adding versioning support for shared libraries
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Sun,  9 Nov 2003 09:43:02 -0500
-
-cmake (1.6.7-2) unstable; urgency=low
-
-  * Add Gavin Baker's Take II on adding versioning support for shared libraries
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Mon, 23 Jun 2003 13:39:03 -0400
-
-cmake (1.6.7-1) unstable; urgency=low
-
-  * New upstream release
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Mon, 23 Jun 2003 13:06:46 -0400
-
-cmake (1.6.5-1) unstable; urgency=low
-
-  * New upstream release
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Mon, 24 Feb 2003 11:25:58 -0500
-
-cmake (1.6.4-1) unstable; urgency=low
-
-  * New upstream release, move up to tcl8.4
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Fri, 14 Feb 2003 16:06:12 -0500
-
-cmake (1.4.7-1) unstable; urgency=low
-
-  * New upstream release
-  * Build without dart-client network submission (Closes: #175579)
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Mon, 06 Jan 2003 19:02:36 -0500
-
-cmake (1.4.6-1) unstable; urgency=low
-
-  * New upstream release
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Thu, 24 Oct 2002 21:19:47 -0400
-
-cmake (1.4.5-2) unstable; urgency=low
-
-  * Don't put man page in /usr/man (Closes: #163901)
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Thu, 17 Oct 2002 17:43:22 -0400
-
-cmake (1.4.5-1) unstable; urgency=low
-
-  * New upstream version.
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Fri, 20 Sep 2002 23:33:49 -0400
-
-cmake (1.4.3-3) unstable; urgency=low
-
-  * Build with Dart, build in separate Build directory to make cleanup easier
-  * New upstream man page
-  * CMakeSetup no longer exists upstream, Debian menu now refers to ccmake
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Tue,  6 Aug 2002 19:05:05 -0400
-
-cmake (1.4.3-2) unstable; urgency=low
-
-  * Oh no, not again.
-  * Use -ffunction-sections on parisc64 (closes: #155366)
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Sat,  3 Aug 2002 21:45:37 -0400
-
-cmake (1.4.3-1) unstable; urgency=low
-
-  * New upstream. (Closes: #155296)
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Sat,  3 Aug 2002 00:02:18 -0400
-
-cmake (1.2-2) unstable; urgency=low
-
-  * Use -ffunction-sections on parisc64 (closes: #133696)
-
- -- Maitland Bottoms <bottoms@sarti.debian.org>  Thu, 14 Feb 2002 18:36:25 +0000
-
-cmake (1.2-1) unstable; urgency=low
-
-  * New upstream.
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Wed, 09 Jan 2002 17:20:12 -0500
-
-cmake (1.0-1) unstable; urgency=low
-
-  * Newer upstream. (Need to keep up with VTK 4 build needs)
-  * Patched support for DESTDIR in install targets
-  * Patched option to disable use of -rpath using CMAKE_SKIP_RPATH
-  * include cmake-mode.el
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Wed, 09 Jan 2002 17:20:12 -0500
-
-cmake (0.98-1) unstable; urgency=low
-
-  * Newer upstream, includes curses interface: ccmake
-  * Patched to support make install DESTDIR=foo
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Mon, 17 Dec 2001 19:54:32 -0500
-
-cmake (0.96-1) unstable; urgency=low
-
-  * Initial Release.
-    (Closes: #121610)
-
- -- A. Maitland Bottoms <bottoms@debian.org>  Wed, 28 Nov 2001 08:45:22 -0500
-
 
 cmake (2.0.5-1) unstable; urgency=low
 

@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "WarningMessagesDialog.h"
 
 WarningMessagesDialog::WarningMessagesDialog(QWidget* prnt, QCMake* instance)
@@ -26,21 +26,23 @@ void WarningMessagesDialog::setInitialValues()
 
 void WarningMessagesDialog::setupSignals()
 {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+  static auto const checkStateChanged = &QCheckBox::checkStateChanged;
+#else
+  static auto const checkStateChanged = &QCheckBox::stateChanged;
+#endif
   QObject::connect(this->buttonBox, &QDialogButtonBox::accepted, this,
                    &WarningMessagesDialog::doAccept);
-
-  QObject::connect(this->suppressDeveloperWarnings, &QCheckBox::stateChanged,
-                   this,
+  QObject::connect(this->suppressDeveloperWarnings, checkStateChanged, this,
                    &WarningMessagesDialog::doSuppressDeveloperWarningsChanged);
   QObject::connect(
-    this->suppressDeprecatedWarnings, &QCheckBox::stateChanged, this,
+    this->suppressDeprecatedWarnings, checkStateChanged, this,
     &WarningMessagesDialog::doSuppressDeprecatedWarningsChanged);
 
-  QObject::connect(this->developerWarningsAsErrors, &QCheckBox::stateChanged,
-                   this,
+  QObject::connect(this->developerWarningsAsErrors, checkStateChanged, this,
                    &WarningMessagesDialog::doDeveloperWarningsAsErrorsChanged);
   QObject::connect(
-    this->deprecatedWarningsAsErrors, &QCheckBox::stateChanged, this,
+    this->deprecatedWarningsAsErrors, checkStateChanged, this,
     &WarningMessagesDialog::doDeprecatedWarningsAsErrorsChanged);
 }
 
@@ -57,7 +59,8 @@ void WarningMessagesDialog::doAccept()
     this->deprecatedWarningsAsErrors->isChecked());
 }
 
-void WarningMessagesDialog::doSuppressDeveloperWarningsChanged(int state)
+void WarningMessagesDialog::doSuppressDeveloperWarningsChanged(
+  CheckState state)
 {
   // no warnings implies no errors either
   if (state) {
@@ -65,7 +68,8 @@ void WarningMessagesDialog::doSuppressDeveloperWarningsChanged(int state)
   }
 }
 
-void WarningMessagesDialog::doSuppressDeprecatedWarningsChanged(int state)
+void WarningMessagesDialog::doSuppressDeprecatedWarningsChanged(
+  CheckState state)
 {
   // no warnings implies no errors either
   if (state) {
@@ -73,7 +77,8 @@ void WarningMessagesDialog::doSuppressDeprecatedWarningsChanged(int state)
   }
 }
 
-void WarningMessagesDialog::doDeveloperWarningsAsErrorsChanged(int state)
+void WarningMessagesDialog::doDeveloperWarningsAsErrorsChanged(
+  CheckState state)
 {
   // warnings as errors implies warnings are not suppressed
   if (state) {
@@ -81,7 +86,8 @@ void WarningMessagesDialog::doDeveloperWarningsAsErrorsChanged(int state)
   }
 }
 
-void WarningMessagesDialog::doDeprecatedWarningsAsErrorsChanged(int state)
+void WarningMessagesDialog::doDeprecatedWarningsAsErrorsChanged(
+  CheckState state)
 {
   // warnings as errors implies warnings are not suppressed
   if (state) {

@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmGeneratorExpressionParser.h"
 
 #include <cassert>
@@ -115,31 +115,9 @@ void cmGeneratorExpressionParser::ParseGeneratorExpression(
       emptyParamTermination = true;
     }
 
-    while (this->it != this->Tokens.end() &&
-           this->it->TokenType == cmGeneratorExpressionToken::CommaSeparator) {
-      commaTokens.push_back(this->it);
-      parameters.resize(parameters.size() + 1);
-      assert(this->it != this->Tokens.end());
-      ++this->it;
-      if (this->it == this->Tokens.end()) {
-        emptyParamTermination = true;
-      }
-    }
-    while (this->it != this->Tokens.end() &&
-           this->it->TokenType == cmGeneratorExpressionToken::ColonSeparator) {
-      extendText(*(parameters.end() - 1), this->it);
-      assert(this->it != this->Tokens.end());
-      ++this->it;
-    }
-    while (this->it != this->Tokens.end() &&
-           this->it->TokenType != cmGeneratorExpressionToken::EndExpression) {
-      this->ParseContent(*(parameters.end() - 1));
-      if (this->it == this->Tokens.end()) {
-        break;
-      }
-      while (this->it != this->Tokens.end() &&
-             this->it->TokenType ==
-               cmGeneratorExpressionToken::CommaSeparator) {
+    auto handleCommaOrColon = [this, &commaTokens, &parameters,
+                               &emptyParamTermination]() -> void {
+      if (this->it->TokenType == cmGeneratorExpressionToken::CommaSeparator) {
         commaTokens.push_back(this->it);
         parameters.resize(parameters.size() + 1);
         assert(this->it != this->Tokens.end());
@@ -147,13 +125,31 @@ void cmGeneratorExpressionParser::ParseGeneratorExpression(
         if (this->it == this->Tokens.end()) {
           emptyParamTermination = true;
         }
-      }
-      while (this->it != this->Tokens.end() &&
-             this->it->TokenType ==
-               cmGeneratorExpressionToken::ColonSeparator) {
+      } else if (this->it->TokenType ==
+                 cmGeneratorExpressionToken::ColonSeparator) {
         extendText(*(parameters.end() - 1), this->it);
         assert(this->it != this->Tokens.end());
         ++this->it;
+      }
+    };
+
+    while (
+      this->it != this->Tokens.end() &&
+      (this->it->TokenType == cmGeneratorExpressionToken::CommaSeparator ||
+       this->it->TokenType == cmGeneratorExpressionToken::ColonSeparator)) {
+      handleCommaOrColon();
+    }
+    while (this->it != this->Tokens.end() &&
+           this->it->TokenType != cmGeneratorExpressionToken::EndExpression) {
+      this->ParseContent(*(parameters.end() - 1));
+      if (this->it == this->Tokens.end()) {
+        break;
+      }
+      while (
+        this->it != this->Tokens.end() &&
+        (this->it->TokenType == cmGeneratorExpressionToken::CommaSeparator ||
+         this->it->TokenType == cmGeneratorExpressionToken::ColonSeparator)) {
+        handleCommaOrColon();
       }
     }
     if (this->it != this->Tokens.end() &&
@@ -174,7 +170,7 @@ void cmGeneratorExpressionParser::ParseGeneratorExpression(
       extendText(result, colonToken);
 
       auto pit = parameters.begin();
-      const auto pend = parameters.end();
+      auto const pend = parameters.end();
       auto commaIt = commaTokens.begin();
       assert(parameters.size() > commaTokens.size());
       for (; pit != pend; ++pit, ++commaIt) {

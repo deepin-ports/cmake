@@ -7,12 +7,24 @@ run_cmake(BadArg3)
 run_cmake(QueryList)
 run_cmake(QueryKeys)
 
+if(CMake_TEST_LOCALE_CHARSET STREQUAL "UTF-8" OR CMAKE_HOST_WIN32)
+  set(RunCMake-stdout-file Locale-stdout-utf-8.txt)
+elseif(CMake_TEST_LOCALE_CHARSET STREQUAL "ISO-8859-1")
+  set(RunCMake-stdout-file Locale-stdout-iso-8859-1.txt)
+endif()
+run_cmake_script(Locale)
+unset(RunCMake-stdout-file)
+
 run_cmake(UnitTest)
 run_cmake(Exherbo)
 run_cmake(Ubuntu)
 
 run_cmake(CentOS6)
 run_cmake(Debian6)
+
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+  run_cmake(MacOS)
+endif()
 
 run_cmake(UserFallbackScript)
 

@@ -1,8 +1,10 @@
+set(CMAKE_INTERMEDIATE_DIR_STRATEGY FULL CACHE STRING "" FORCE)
+
 # Fake out that we have dyndep; we only need to generate, not actually build
 # here.
 set(CMAKE_CXX_SCANDEP_SOURCE "")
 
-set(CMAKE_EXPERIMENTAL_EXPORT_BUILD_DATABASE "4bd552e2-b7fb-429a-ab23-c83ef53f3f13")
+set(CMAKE_EXPERIMENTAL_EXPORT_BUILD_DATABASE "73194a1d-c0b5-41b9-9190-a4512925e192")
 
 enable_language(CXX)
 

@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmProcessTools.h"
 
 #include <algorithm>
@@ -9,7 +9,6 @@
 #include <cm3p/uv.h>
 
 #include "cmProcessOutput.h"
-#include "cmUVHandlePtr.h"
 #include "cmUVStream.h"
 
 std::vector<cmUVProcessChain::Status> cmProcessTools::RunProcess(
@@ -24,11 +23,8 @@ std::vector<cmUVProcessChain::Status> cmProcessTools::RunProcess(
   auto chain = builder.Start();
 
   std::string strdata;
-  cm::uv_pipe_ptr outputPipe;
-  outputPipe.init(chain.GetLoop(), 0);
-  uv_pipe_open(outputPipe, chain.OutputStream());
   auto outputHandle = cmUVStreamRead(
-    outputPipe,
+    chain.OutputStream(),
     [&out, &processOutput, &strdata](std::vector<char> data) {
       if (out) {
         processOutput.DecodeText(data.data(), data.size(), strdata, 1);
@@ -38,11 +34,8 @@ std::vector<cmUVProcessChain::Status> cmProcessTools::RunProcess(
       }
     },
     [&out]() { out = nullptr; });
-  cm::uv_pipe_ptr errorPipe;
-  errorPipe.init(chain.GetLoop(), 0);
-  uv_pipe_open(errorPipe, chain.ErrorStream());
   auto errorHandle = cmUVStreamRead(
-    errorPipe,
+    chain.ErrorStream(),
     [&err, &processOutput, &strdata](std::vector<char> data) {
       if (err) {
         processOutput.DecodeText(data.data(), data.size(), strdata, 2);
@@ -60,7 +53,7 @@ std::vector<cmUVProcessChain::Status> cmProcessTools::RunProcess(
   auto status = chain.GetStatus();
   std::transform(
     status.begin(), status.end(), std::back_inserter(result),
-    [](const cmUVProcessChain::Status* s) -> cmUVProcessChain::Status {
+    [](cmUVProcessChain::Status const* s) -> cmUVProcessChain::Status {
       return *s;
     });
   return result;
@@ -72,16 +65,16 @@ cmProcessTools::LineParser::LineParser(char sep, bool ignoreCR)
 {
 }
 
-void cmProcessTools::LineParser::SetLog(std::ostream* log, const char* prefix)
+void cmProcessTools::LineParser::SetLog(std::ostream* log, char const* prefix)
 {
   this->Log = log;
   this->Prefix = prefix ? prefix : "";
 }
 
-bool cmProcessTools::LineParser::ProcessChunk(const char* first, int length)
+bool cmProcessTools::LineParser::ProcessChunk(char const* first, int length)
 {
-  const char* last = first + length;
-  for (const char* c = first; c != last; ++c) {
+  char const* last = first + length;
+  for (char const* c = first; c != last; ++c) {
     if (*c == this->Separator || *c == '\0') {
       this->LineEnd = *c;
 

@@ -11,12 +11,16 @@ set(targets
   aix-C-IBMClang-17.1.1.2 aix-CXX-IBMClang-17.1.1.2
   craype-C-Cray-8.7 craype-CXX-Cray-8.7 craype-Fortran-Cray-8.7
   craype-C-Cray-9.0-hlist-ad craype-CXX-Cray-9.0-hlist-ad craype-Fortran-Cray-9.0-hlist-ad
+  craype-C-CrayClang-18.0.1 craype-CXX-CrayClang-18.0.1 craype-Fortran-Cray-18.0.1
+  craype-C-CrayClang-18.0.1-fopenmp craype-CXX-CrayClang-18.0.1-fopenmp craype-Fortran-Cray-18.0.1-homp
+  craype-C-CrayClang-18.0.1-fopenmp-accel craype-CXX-CrayClang-18.0.1-fopenmp-accel craype-Fortran-Cray-18.0.1-homp-accel
   craype-C-GNU-7.3.0 craype-CXX-GNU-7.3.0 craype-Fortran-GNU-7.3.0
   craype-C-Intel-18.0.2.20180210 craype-CXX-Intel-18.0.2.20180210
     craype-Fortran-Intel-18.0.2.20180210
   darwin-C-AppleClang-8.0.0.8000042 darwin-CXX-AppleClang-8.0.0.8000042
     darwin_nostdinc-C-AppleClang-8.0.0.8000042
     darwin_nostdinc-CXX-AppleClang-8.0.0.8000042
+  emscripten-C-Clang-21.0.0 emscripten-CXX-Clang-21.0.0
   freebsd-C-Clang-3.3.0 freebsd-CXX-Clang-3.3.0 freebsd-Fortran-GNU-4.6.4
   hand-C-empty hand-CXX-empty
   hand-C-relative hand-CXX-relative
@@ -41,10 +45,13 @@ set(targets
   linux-CUDA-NVIDIA-10.1.168-CLANG linux-CUDA-NVIDIA-10.1.168-XLClang-v
     linux-CUDA-NVIDIA-9.2.148-GCC
   linux-Fortran-LLVMFlang-15.0.0
+  linux-Fortran-LLVMFlang-21.1.3
   linux-Fortran-LFortran-0.35.0-clang
   linux-Fortran-LFortran-0.35.0-gcc
   linux-Fortran-LFortran-0.41.0-clang
   linux-Fortran-LFortran-0.41.0-gcc
+  linux-Fortran-LFortran-0.55.0-clang
+  linux-Fortran-LFortran-0.55.0-gcc
   linux-custom_clang-C-Clang-13.0.0 linux-custom_clang-CXX-Clang-13.0.0
   mingw.org-C-GNU-4.9.3 mingw.org-CXX-GNU-4.9.3
   netbsd-C-GNU-4.8.5 netbsd-CXX-GNU-4.8.5
@@ -59,6 +66,7 @@ set(targets
   windows_x86_64-Fortran-LLVMFlang-18.0.0-MSVC
   windows_x86_64-C-Intel-2021.9.0.20230302 windows_x86_64-CXX-Intel-2021.9.0.20230302 windows_x86_64-Fortran-Intel-2021.9.0.20230302
   windows_x86_64-C-IntelLLVM-2023.1.0 windows_x86_64-CXX-IntelLLVM-2023.1.0 windows_x86_64-Fortran-IntelLLVM-2023.1.0
+  windows_x86_64-CUDA-NVIDIA-13.1.115
   windows_arm64-C-Clang-17.0.1-MSVC windows_arm64-CXX-Clang-17.0.1-MSVC windows_arm64-Fortran-LLVMFlang-17.0.1-MSVC
   )
 
@@ -163,14 +171,26 @@ foreach(t ${targets})
       endif()
     endforeach()
 
-    cmake_parse_implicit_link_info2("${input}" log
-        "${CMAKE_${lang}_IMPLICIT_OBJECT_REGEX}"
-        LANGUAGE ${lang}
-        COMPUTE_LINKER linker_tool
-        COMPUTE_IMPLICIT_LIBS implicit_libs
-        COMPUTE_IMPLICIT_DIRS idirs
-        COMPUTE_IMPLICIT_FWKS implicit_fwks
-        COMPUTE_IMPLICIT_OBJECTS implicit_objs)
+    if(DEFINED CMAKE_${lang}_USE_NVCC_PARSE_IMPLICIT_INFO)
+      include(${CMAKE_ROOT}/Modules/Internal/CMakeNVCCParseImplicitInfo.cmake)
+      include(${CMAKE_ROOT}/Modules/Internal/CMakeCUDAFilterImplicitLibs.cmake)
+      set(CMAKE_${lang}_COMPILER_PRODUCED_OUTPUT "${input}")
+      cmake_nvcc_parse_implicit_info("${lang}" "CMAKE_${lang}_")
+      cmake_cuda_filter_implicit_libs(CMAKE_${lang}_HOST_IMPLICIT_LINK_LIBRARIES)
+      set(linker_tool "${CMAKE_${lang}_HOST_LINK_LAUNCHER}")
+      set(implicit_libs "${CMAKE_${lang}_HOST_IMPLICIT_LINK_LIBRARIES}")
+      set(idirs "${CMAKE_${lang}_HOST_IMPLICIT_LINK_DIRECTORIES}")
+      set(implicit_objs )
+    else()
+      cmake_parse_implicit_link_info2("${input}" log
+          "${CMAKE_${lang}_IMPLICIT_OBJECT_REGEX}"
+          LANGUAGE ${lang}
+          COMPUTE_LINKER linker_tool
+          COMPUTE_IMPLICIT_LIBS implicit_libs
+          COMPUTE_IMPLICIT_DIRS idirs
+          COMPUTE_IMPLICIT_FWKS implicit_fwks
+          COMPUTE_IMPLICIT_OBJECTS implicit_objs)
+    endif()
 
     set(library_arch)
     cmake_parse_library_architecture(${lang} "${idirs}" "${implicit_objs}" library_arch)

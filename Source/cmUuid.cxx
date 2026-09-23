@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmUuid.h"
 
 #include <array>
@@ -7,10 +7,10 @@
 
 #include "cmCryptoHash.h"
 
-static const std::array<int, 5> kUuidGroups = { { 4, 2, 2, 2, 6 } };
+static std::array<int, 5> const kUuidGroups = { { 4, 2, 2, 2, 6 } };
 
 std::string cmUuid::FromMd5(std::vector<unsigned char> const& uuidNamespace,
-                            std::string const& name) const
+                            cm::string_view name) const
 {
   std::vector<unsigned char> hashInput;
   this->CreateHashInput(uuidNamespace, name, hashInput);
@@ -24,7 +24,7 @@ std::string cmUuid::FromMd5(std::vector<unsigned char> const& uuidNamespace,
 }
 
 std::string cmUuid::FromSha1(std::vector<unsigned char> const& uuidNamespace,
-                             std::string const& name) const
+                             cm::string_view name) const
 {
   std::vector<unsigned char> hashInput;
   this->CreateHashInput(uuidNamespace, name, hashInput);
@@ -38,7 +38,7 @@ std::string cmUuid::FromSha1(std::vector<unsigned char> const& uuidNamespace,
 }
 
 void cmUuid::CreateHashInput(std::vector<unsigned char> const& uuidNamespace,
-                             std::string const& name,
+                             cm::string_view name,
                              std::vector<unsigned char>& output) const
 {
   output = uuidNamespace;
@@ -46,11 +46,11 @@ void cmUuid::CreateHashInput(std::vector<unsigned char> const& uuidNamespace,
   if (!name.empty()) {
     output.resize(output.size() + name.size());
 
-    memcpy(output.data() + uuidNamespace.size(), name.c_str(), name.size());
+    memcpy(output.data() + uuidNamespace.size(), name.data(), name.size());
   }
 }
 
-std::string cmUuid::FromDigest(const unsigned char* digest,
+std::string cmUuid::FromDigest(unsigned char const* digest,
                                unsigned char version) const
 {
   using byte_t = unsigned char;
@@ -67,7 +67,7 @@ std::string cmUuid::FromDigest(const unsigned char* digest,
   return this->BinaryToString(uuid);
 }
 
-bool cmUuid::StringToBinary(std::string const& input,
+bool cmUuid::StringToBinary(cm::string_view input,
                             std::vector<unsigned char>& output) const
 {
   output.clear();
@@ -92,7 +92,7 @@ bool cmUuid::StringToBinary(std::string const& input,
   return true;
 }
 
-std::string cmUuid::BinaryToString(const unsigned char* input) const
+std::string cmUuid::BinaryToString(unsigned char const* input) const
 {
   std::string output;
 
@@ -126,7 +126,7 @@ std::string cmUuid::ByteToHex(unsigned char inputByte) const
   return result;
 }
 
-bool cmUuid::StringToBinaryImpl(std::string const& input,
+bool cmUuid::StringToBinaryImpl(cm::string_view input,
                                 std::vector<unsigned char>& output) const
 {
   if (input.size() % 2) {

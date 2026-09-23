@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.10...3.25) # Enable CMP0091 and CMP0141.
+cmake_policy(SET CMP0184 NEW)
 project(FortranOnly Fortran)
 message("CTEST_FULL_OUTPUT ")
+
+set(CMAKE_INTERMEDIATE_DIR_STRATEGY FULL CACHE STRING "" FORCE)
 
 if("${CMAKE_Fortran_COMPILER_ID};${CMAKE_Fortran_SIMULATE_ID}" MATCHES "^Intel(LLVM)?;MSVC$")
   string(APPEND CMAKE_Fortran_FLAGS_DEBUG " -Z7")
@@ -8,7 +11,12 @@ if("${CMAKE_Fortran_COMPILER_ID};${CMAKE_Fortran_SIMULATE_ID}" MATCHES "^Intel(L
 endif()
 
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "LFortran")
-  add_compile_options(--implicit-interface --generate-object-code)
+  if(CMAKE_Fortran_COMPILER_VERSION VERSION_GREATER_EQUAL "0.55")
+    set(_LFORTRAN_SC_FLAG --separate-compilation)
+  else()
+    set(_LFORTRAN_SC_FLAG --generate-object-code)
+  endif()
+  add_compile_options(--implicit-interface ${_LFORTRAN_SC_FLAG})
 endif()
 
 # create a library with hello and world functions
@@ -62,7 +70,7 @@ add_dependencies(checksayhello sayhello)
 
 include(CheckFortranSourceCompiles)
 unset(HAVE_PRINT CACHE)
-CHECK_Fortran_SOURCE_COMPILES([[
+check_fortran_source_compiles([[
       PROGRAM TEST_HAVE_PRINT
         PRINT *, 'Hello'
       END
@@ -92,7 +100,7 @@ endif()
 
 unset(Fortran_BOGUS_FLAG CACHE)
 include(CheckFortranCompilerFlag)
-CHECK_Fortran_COMPILER_FLAG(-_this_is_not_a_flag_ Fortran_BOGUS_FLAG)
+check_fortran_compiler_flag(-_this_is_not_a_flag_ Fortran_BOGUS_FLAG)
 if (Fortran_BOGUS_FLAG)
   message(SEND_ERROR "CHECK_Fortran_COMPILER_FLAG() succeeded, but should have failed")
 endif()
@@ -189,4 +197,12 @@ if(CMAKE_Fortran_COMPILE_OPTIONS_PREPROCESS_OFF AND
   endif()
 
   set_property(SOURCE no_preprocess_source_upper.F no_preprocess_source_fpp.fpp PROPERTY Fortran_PREPROCESS OFF)
+endif()
+
+# Test that we are safe from infinite include recursion in dependency scanner
+if (# The SunPro Fortran compiler does not support recursive inclusion
+    NOT CMAKE_Fortran_COMPILER_ID STREQUAL "SunPro"
+    # The Intel Fortran VS integration overflows its stack.
+    AND NOT CMAKE_GENERATOR MATCHES "Visual Studio")
+  add_executable(test_include_loop test_include_loop.F)
 endif()

@@ -1,11 +1,12 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 
 #include "cmLinkLineDeviceComputer.h"
 
 #include <algorithm>
 #include <set>
 #include <utility>
+#include <vector>
 
 #include <cmext/algorithm>
 
@@ -44,7 +45,7 @@ static bool cmLinkItemValidForDevice(std::string const& item)
   // * '-pthread' => drop
   // * '-a' => drop
   // * '-framework Name' (as one string) => drop
-  return (!cmHasLiteralPrefix(item, "-") || //
+  return (!cmHasPrefix(item, '-') ||        //
           cmHasLiteralPrefix(item, "-l") || //
           cmHasLiteralPrefix(item, "-L") || //
           cmHasLiteralPrefix(item, "--library"));
@@ -155,11 +156,11 @@ void cmLinkLineDeviceComputer::ComputeLinkLibraries(
     if (emitted.insert(linkLib.Value).second) {
       linkLib.Value += " ";
 
-      const cmLinkImplementation* linkImpl =
+      cmLinkImplementation const* linkImpl =
         cli.GetTarget()->GetLinkImplementation(cli.GetConfig(),
                                                cmGeneratorTarget::UseTo::Link);
 
-      for (const cmLinkImplItem& iter : linkImpl->Libraries) {
+      for (cmLinkItem const& iter : linkImpl->Libraries) {
         if (iter.Target &&
             iter.Target->GetType() != cmStateEnums::INTERFACE_LIBRARY) {
           std::string libPath = iter.Target->GetLocation(cli.GetConfig());
@@ -186,7 +187,7 @@ std::string cmLinkLineDeviceComputer::GetLinkerLanguage(cmGeneratorTarget*,
 }
 
 bool requireDeviceLinking(cmGeneratorTarget& target, cmLocalGenerator& lg,
-                          const std::string& config)
+                          std::string const& config)
 {
   if (!target.GetGlobalGenerator()->GetLanguageEnabled("CUDA")) {
     return false;

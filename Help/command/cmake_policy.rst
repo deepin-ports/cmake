@@ -24,34 +24,28 @@ The ``cmake_policy`` command is used to set policies to ``OLD`` or ``NEW``
 behavior.  While setting policies individually is supported, we
 encourage projects to set policies based on CMake versions:
 
-.. signature:: cmake_policy(VERSION <min>[...<max>])
+.. signature:: cmake_policy(VERSION <min>[...<policy_max>])
   :target: VERSION
 
 .. versionadded:: 3.12
-  The optional ``<max>`` version.
+  The optional ``<policy_max>`` version.
 
-``<min>`` and the optional ``<max>`` are each CMake versions of the form
-``major.minor[.patch[.tweak]]``, and the ``...`` is literal.  The ``<min>``
-version must be at least ``2.4`` and at most the running version of CMake.
-The ``<max>`` version, if specified, must be at least the ``<min>`` version
-but may exceed the running version of CMake.  If the running version of
-CMake is older than 3.12, the extra ``...`` dots will be seen as version
-component separators, resulting in the ``...<max>`` part being ignored and
-preserving the pre-3.12 behavior of basing policies on ``<min>``.
+``<min>`` and the optional ``<policy_max>`` are each CMake versions of the
+form ``major.minor[.patch[.tweak]]``, and the ``...`` is literal.
+The ``<min>`` version must be at least ``2.4`` and at most the running
+version of CMake.  The ``<policy_max>`` version, if specified, must be at
+least the ``<min>`` version but may exceed the running version of CMake.
+If the running version of CMake is older than 3.12, the extra ``...``
+dots will be seen as version component separators, resulting in the
+``...<policy_max>`` part being ignored and preserving the pre-3.12 behavior
+of basing policies on ``<min>``.
 
-This specifies that the current CMake code is written for the given
-range of CMake versions.  All policies known to the running version of CMake
-and introduced in the ``<min>`` (or ``<max>``, if specified) version
-or earlier will be set to use ``NEW`` behavior.  All policies
-introduced in later versions will be unset (unless the
-:variable:`CMAKE_POLICY_DEFAULT_CMP<NNNN>` variable sets a default).
-This effectively requests behavior preferred as of a given CMake
-version and tells newer CMake versions to warn about their new policies.
+.. include:: include/POLICY_VERSION.rst
 
 Note that the :command:`cmake_minimum_required(VERSION)`
 command implicitly calls ``cmake_policy(VERSION)`` too.
 
-.. include:: DEPRECATED_POLICY_VERSIONS.txt
+.. include:: include/DEPRECATED_POLICY_VERSIONS.rst
 
 Setting Policies Explicitly
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -65,7 +59,7 @@ policy warning by setting the policy state to ``OLD``.  Alternatively
 one may fix the project to work with the new behavior and set the
 policy state to ``NEW``.
 
-.. include:: ../policy/DEPRECATED.txt
+.. include:: ../policy/include/DEPRECATED.rst
 
 Checking Policy Settings
 ^^^^^^^^^^^^^^^^^^^^^^^^

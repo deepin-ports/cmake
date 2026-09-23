@@ -10,9 +10,8 @@ Get a specific component of a full filename.
 
 .. versionchanged:: 3.24
   The undocumented feature offering the capability to query the ``Windows``
-  registry is superseded by
-  :ref:`cmake_host_system_information(QUERY WINDOWS_REGISTRY)<Query Windows registry>`
-  command.
+  registry is superseded by the
+  :command:`cmake_host_system_information(QUERY WINDOWS_REGISTRY)` command.
 
 .. code-block:: cmake
 
@@ -20,15 +19,13 @@ Get a specific component of a full filename.
 
 Sets ``<var>`` to a component of ``<FileName>``, where ``<mode>`` is one of:
 
-::
-
- DIRECTORY = Directory without file name
- NAME      = File name without directory
- EXT       = File name longest extension (.b.c from d/a.b.c)
- NAME_WE   = File name with neither the directory nor the longest extension
- LAST_EXT  = File name last extension (.c from d/a.b.c)
- NAME_WLE  = File name with neither the directory nor the last extension
- PATH      = Legacy alias for DIRECTORY (use for CMake <= 2.8.11)
+* ``DIRECTORY`` - directory without file name.
+* ``NAME``      - file name without directory.
+* ``EXT``       - file name longest extension (``.b.c`` from ``d/a.b.c``).
+* ``NAME_WE``   - file name with neither the directory nor the longest extension.
+* ``LAST_EXT``  - file name last extension (``.c`` from ``d/a.b.c``).
+* ``NAME_WLE``  - file name with neither the directory nor the last extension.
+* ``PATH``      - legacy alias for ``DIRECTORY`` (use for CMake <= 2.8.11).
 
 .. versionadded:: 3.14
   Added the ``LAST_EXT`` and ``NAME_WLE`` modes.
@@ -46,10 +43,8 @@ added to the cache.
 Sets ``<var>`` to the absolute path of ``<FileName>``, where ``<mode>`` is one
 of:
 
-::
-
- ABSOLUTE  = Full path to file
- REALPATH  = Full path to existing file with symlinks resolved
+* ``ABSOLUTE`` - full path to file.
+* ``REALPATH`` - full path to existing file with symlinks resolved.
 
 If the provided ``<FileName>`` is a relative path, it is evaluated relative
 to the given base directory ``<dir>``.  If no base directory is

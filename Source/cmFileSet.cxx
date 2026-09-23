@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmFileSet.h"
 
 #include <sstream>
@@ -14,6 +14,7 @@
 
 #include "cmsys/RegularExpression.hxx"
 
+#include "cmGenExContext.h"
 #include "cmGeneratorExpression.h"
 #include "cmList.h"
 #include "cmListFileCache.h"
@@ -87,9 +88,9 @@ bool cmFileSetTypeCanBeIncluded(std::string const& type)
   return type == "HEADERS"_s;
 }
 
-cmFileSet::cmFileSet(cmake& cmakeInstance, std::string name, std::string type,
+cmFileSet::cmFileSet(cmMakefile* makefile, std::string name, std::string type,
                      cmFileSetVisibility visibility)
-  : CMakeInstance(cmakeInstance)
+  : Makefile(makefile)
   , Name(std::move(name))
   , Type(std::move(type))
   , Visibility(visibility)
@@ -129,7 +130,8 @@ cmFileSet::CompileFileEntries() const
 
   for (auto const& entry : this->FileEntries) {
     for (auto const& ex : cmList{ entry.Value }) {
-      cmGeneratorExpression ge(this->CMakeInstance, entry.Backtrace);
+      cmGeneratorExpression ge(*this->GetMakefile()->GetCMakeInstance(),
+                               entry.Backtrace);
       auto cge = ge.Parse(ex);
       result.push_back(std::move(cge));
     }
@@ -145,7 +147,8 @@ cmFileSet::CompileDirectoryEntries() const
 
   for (auto const& entry : this->DirectoryEntries) {
     for (auto const& ex : cmList{ entry.Value }) {
-      cmGeneratorExpression ge(this->CMakeInstance, entry.Backtrace);
+      cmGeneratorExpression ge(*this->GetMakefile()->GetCMakeInstance(),
+                               entry.Backtrace);
       auto cge = ge.Parse(ex);
       result.push_back(std::move(cge));
     }
@@ -155,9 +158,8 @@ cmFileSet::CompileDirectoryEntries() const
 }
 
 std::vector<std::string> cmFileSet::EvaluateDirectoryEntries(
-  const std::vector<std::unique_ptr<cmCompiledGeneratorExpression>>& cges,
-  cmLocalGenerator* lg, const std::string& config,
-  const cmGeneratorTarget* target,
+  std::vector<std::unique_ptr<cmCompiledGeneratorExpression>> const& cges,
+  cm::GenEx::Context const& context, cmGeneratorTarget const* target,
   cmGeneratorExpressionDAGChecker* dagChecker) const
 {
   struct DirCacheEntry
@@ -169,16 +171,16 @@ std::vector<std::string> cmFileSet::EvaluateDirectoryEntries(
   std::unordered_map<std::string, DirCacheEntry> dirCache;
   std::vector<std::string> result;
   for (auto const& cge : cges) {
-    auto entry = cge->Evaluate(lg, config, target, dagChecker);
+    auto entry = cge->Evaluate(context, dagChecker, target);
     cmList dirs{ entry };
     for (std::string dir : dirs) {
       if (!cmSystemTools::FileIsFullPath(dir)) {
-        dir = cmStrCat(lg->GetCurrentSourceDirectory(), '/', dir);
+        dir = cmStrCat(context.LG->GetCurrentSourceDirectory(), '/', dir);
       }
 
       auto dirCacheResult = dirCache.emplace(dir, DirCacheEntry());
       auto& dirCacheEntry = dirCacheResult.first->second;
-      const auto isNewCacheEntry = dirCacheResult.second;
+      auto const isNewCacheEntry = dirCacheResult.second;
 
       if (isNewCacheEntry) {
         cmSystemTools::FileId fileId;
@@ -198,7 +200,7 @@ std::vector<std::string> cmFileSet::EvaluateDirectoryEntries(
                                            priorDirCacheEntry.collapsedDir) ||
              cmSystemTools::IsSubDirectory(priorDirCacheEntry.collapsedDir,
                                            dirCacheEntry.collapsedDir))) {
-          lg->GetCMakeInstance()->IssueMessage(
+          context.LG->GetCMakeInstance()->IssueMessage(
             MessageType::FATAL_ERROR,
             cmStrCat(
               "Base directories in file set cannot be subdirectories of each "
@@ -215,17 +217,16 @@ std::vector<std::string> cmFileSet::EvaluateDirectoryEntries(
 }
 
 void cmFileSet::EvaluateFileEntry(
-  const std::vector<std::string>& dirs,
+  std::vector<std::string> const& dirs,
   std::map<std::string, std::vector<std::string>>& filesPerDir,
-  const std::unique_ptr<cmCompiledGeneratorExpression>& cge,
-  cmLocalGenerator* lg, const std::string& config,
-  const cmGeneratorTarget* target,
+  std::unique_ptr<cmCompiledGeneratorExpression> const& cge,
+  cm::GenEx::Context const& context, cmGeneratorTarget const* target,
   cmGeneratorExpressionDAGChecker* dagChecker) const
 {
-  auto files = cge->Evaluate(lg, config, target, dagChecker);
+  auto files = cge->Evaluate(context, dagChecker, target);
   for (std::string file : cmList{ files }) {
     if (!cmSystemTools::FileIsFullPath(file)) {
-      file = cmStrCat(lg->GetCurrentSourceDirectory(), '/', file);
+      file = cmStrCat(context.LG->GetCurrentSourceDirectory(), '/', file);
     }
     auto collapsedFile = cmSystemTools::CollapseFullPath(file);
     bool found = false;
@@ -246,8 +247,8 @@ void cmFileSet::EvaluateFileEntry(
       for (auto const& dir : dirs) {
         e << "\n  " << dir;
       }
-      lg->GetCMakeInstance()->IssueMessage(MessageType::FATAL_ERROR, e.str(),
-                                           cge->GetBacktrace());
+      context.LG->GetCMakeInstance()->IssueMessage(
+        MessageType::FATAL_ERROR, e.str(), cge->GetBacktrace());
       return;
     }
 
@@ -255,10 +256,98 @@ void cmFileSet::EvaluateFileEntry(
   }
 }
 
-bool cmFileSet::IsValidName(const std::string& name)
+bool cmFileSet::IsValidName(std::string const& name)
 {
-  static const cmsys::RegularExpression regex("^[a-z0-9][a-zA-Z0-9_]*$");
+  static cmsys::RegularExpression const regex("^[a-z0-9][a-zA-Z0-9_]*$");
 
   cmsys::RegularExpressionMatch match;
   return regex.find(name.c_str(), match);
+}
+
+std::string const cmFileSet::propCOMPILE_DEFINITIONS = "COMPILE_DEFINITIONS";
+std::string const cmFileSet::propCOMPILE_OPTIONS = "COMPILE_OPTIONS";
+std::string const cmFileSet::propINCLUDE_DIRECTORIES = "INCLUDE_DIRECTORIES";
+
+void cmFileSet::SetProperty(std::string const& prop, cmValue value)
+{
+  if (prop == propINCLUDE_DIRECTORIES) {
+    this->IncludeDirectories.clear();
+    if (value) {
+      cmListFileBacktrace lfbt = this->GetMakefile()->GetBacktrace();
+      this->IncludeDirectories.emplace_back(value, lfbt);
+    }
+  } else if (prop == propCOMPILE_OPTIONS) {
+    this->CompileOptions.clear();
+    if (value) {
+      cmListFileBacktrace lfbt = this->GetMakefile()->GetBacktrace();
+      this->CompileOptions.emplace_back(value, lfbt);
+    }
+  } else if (prop == propCOMPILE_DEFINITIONS) {
+    this->CompileDefinitions.clear();
+    if (value) {
+      cmListFileBacktrace lfbt = this->GetMakefile()->GetBacktrace();
+      this->CompileDefinitions.emplace_back(value, lfbt);
+    }
+  } else {
+    this->Properties.SetProperty(prop, value);
+  }
+}
+
+void cmFileSet::AppendProperty(std::string const& prop,
+                               std::string const& value, bool asString)
+{
+  if (prop == propINCLUDE_DIRECTORIES) {
+    if (!value.empty()) {
+      cmListFileBacktrace lfbt = this->GetMakefile()->GetBacktrace();
+      this->IncludeDirectories.emplace_back(value, lfbt);
+    }
+  } else if (prop == propCOMPILE_OPTIONS) {
+    if (!value.empty()) {
+      cmListFileBacktrace lfbt = this->GetMakefile()->GetBacktrace();
+      this->CompileOptions.emplace_back(value, lfbt);
+    }
+  } else if (prop == propCOMPILE_DEFINITIONS) {
+    if (!value.empty()) {
+      cmListFileBacktrace lfbt = this->GetMakefile()->GetBacktrace();
+      this->CompileDefinitions.emplace_back(value, lfbt);
+    }
+  } else {
+    this->Properties.AppendProperty(prop, value, asString);
+  }
+}
+
+cmValue cmFileSet::GetProperty(std::string const& prop) const
+{
+  // Check for the properties with backtraces.
+  if (prop == propINCLUDE_DIRECTORIES) {
+    if (this->IncludeDirectories.empty()) {
+      return nullptr;
+    }
+
+    static std::string output;
+    output = cmList::to_string(this->IncludeDirectories);
+    return cmValue(output);
+  }
+
+  if (prop == propCOMPILE_OPTIONS) {
+    if (this->CompileOptions.empty()) {
+      return nullptr;
+    }
+
+    static std::string output;
+    output = cmList::to_string(this->CompileOptions);
+    return cmValue(output);
+  }
+
+  if (prop == propCOMPILE_DEFINITIONS) {
+    if (this->CompileDefinitions.empty()) {
+      return nullptr;
+    }
+
+    static std::string output;
+    output = cmList::to_string(this->CompileDefinitions);
+    return cmValue(output);
+  }
+
+  return this->Properties.GetPropertyValue(prop);
 }

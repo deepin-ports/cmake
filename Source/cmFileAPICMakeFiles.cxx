@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmFileAPICMakeFiles.h"
 
 #include <memory>
@@ -22,7 +22,7 @@ namespace {
 class CMakeFiles
 {
   cmFileAPI& FileAPI;
-  unsigned long Version;
+  unsigned int Version;
   std::string CMakeModules;
   std::string const& TopSource;
   std::string const& TopBuild;
@@ -35,11 +35,11 @@ class CMakeFiles
   Json::Value DumpGlobDependent(cmGlobCacheEntry const& entry);
 
 public:
-  CMakeFiles(cmFileAPI& fileAPI, unsigned long version);
+  CMakeFiles(cmFileAPI& fileAPI, unsigned int version);
   Json::Value Dump();
 };
 
-CMakeFiles::CMakeFiles(cmFileAPI& fileAPI, unsigned long version)
+CMakeFiles::CMakeFiles(cmFileAPI& fileAPI, unsigned int version)
   : FileAPI(fileAPI)
   , Version(version)
   , CMakeModules(cmSystemTools::GetCMakeRoot() + "/Modules")
@@ -76,7 +76,7 @@ Json::Value CMakeFiles::DumpInputs()
 
   cmGlobalGenerator* gg =
     this->FileAPI.GetCMakeInstance()->GetGlobalGenerator();
-  for (const auto& lg : gg->GetLocalGenerators()) {
+  for (auto const& lg : gg->GetLocalGenerators()) {
     cmMakefile const* mf = lg->GetMakefile();
     for (std::string const& file : mf->GetListFiles()) {
       inputs.append(this->DumpInput(file));
@@ -150,7 +150,7 @@ Json::Value CMakeFiles::DumpGlobDependent(cmGlobCacheEntry const& entry)
 }
 }
 
-Json::Value cmFileAPICMakeFilesDump(cmFileAPI& fileAPI, unsigned long version)
+Json::Value cmFileAPICMakeFilesDump(cmFileAPI& fileAPI, unsigned int version)
 {
   CMakeFiles cmakeFiles(fileAPI, version);
   return cmakeFiles.Dump();

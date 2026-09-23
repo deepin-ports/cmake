@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmVSSetupHelper.h"
 
 #include <utility>
@@ -54,6 +54,8 @@ const CLSID CLSID_SetupConfiguration = {
 #endif
 
 namespace {
+const WCHAR* Win11SDKComponent =
+  L"Microsoft.VisualStudio.Component.Windows11SDK";
 const WCHAR* Win10SDKComponent =
   L"Microsoft.VisualStudio.Component.Windows10SDK";
 const WCHAR* Win81SDKComponent =
@@ -156,10 +158,9 @@ bool cmVSSetupAPIHelper::CheckInstalledComponent(
   std::wstring id = std::wstring(bstrId);
   std::wstring type = std::wstring(bstrType);
 
-  // Checks for any version of Win10 SDK. The version is appended at the end of
-  // the
-  // component name ex: Microsoft.VisualStudio.Component.Windows10SDK.10240
-  if (id.find(Win10SDKComponent) != std::wstring::npos &&
+  // Check for any version of Win10 or Win11 SDK.
+  // The component name may have a `.<version>` suffix.  Accept any.
+  if ((id.find(Win11SDKComponent) == 0 || id.find(Win10SDKComponent) == 0) &&
       type == ComponentType) {
     bWin10SDK = true;
     ret = true;
@@ -306,8 +307,8 @@ namespace {
 std::string FindVsWhereCommand()
 {
   std::string vswhere;
-  static const char* programFiles[] = { "ProgramFiles(x86)", "ProgramFiles" };
-  for (const char* pf : programFiles) {
+  static char const* programFiles[] = { "ProgramFiles(x86)", "ProgramFiles" };
+  for (char const* pf : programFiles) {
     if (cmSystemTools::GetEnv(pf, vswhere)) {
       vswhere += "/Microsoft Visual Studio/Installer/vswhere.exe";
       if (cmSystemTools::FileExists(vswhere)) {
@@ -350,7 +351,7 @@ bool cmVSSetupAPIHelper::EnumerateVSInstancesWithVswhere(
     return false;
   }
 
-  for (const auto& item : json) {
+  for (auto const& item : json) {
     VSInstanceInfo instance;
     instance.Version = item["installationVersion"].asString();
     instance.VSInstallLocation = item["installationPath"].asString();
@@ -433,14 +434,11 @@ bool cmVSSetupAPIHelper::EnumerateAndChooseVSInstance()
 
   std::string envVSCommonToolsDir;
   std::string envVSCommonToolsDirEnvName =
-    cmStrCat("VS", std::to_string(this->Version), "0COMNTOOLS");
+    cmStrCat("VS", this->Version, "0COMNTOOLS");
 
-  if (cmSystemTools::GetEnv(envVSCommonToolsDirEnvName.c_str(),
-                            envVSCommonToolsDir)) {
+  if (cmSystemTools::GetEnv(envVSCommonToolsDirEnvName, envVSCommonToolsDir)) {
     cmSystemTools::ConvertToUnixSlashes(envVSCommonToolsDir);
   }
-
-  std::string const wantVersion = cmStrCat(std::to_string(this->Version), '.');
 
   bool specifiedLocationNotSpecifiedVersion = false;
 
@@ -455,8 +453,10 @@ bool cmVSSetupAPIHelper::EnumerateAndChooseVSInstance()
     return false;
   }
 
+  std::string const wantVersion = cmStrCat(this->Version, '.');
+
   std::vector<VSInstanceInfo> vecVSInstances;
-  for (const auto& instanceInfo : vecVSInstancesAll) {
+  for (auto const& instanceInfo : vecVSInstancesAll) {
     // We are looking for a specific major version.
     if (instanceInfo.Version.size() < wantVersion.size() ||
         instanceInfo.Version.substr(0, wantVersion.size()) != wantVersion) {
@@ -515,7 +515,7 @@ bool cmVSSetupAPIHelper::EnumerateAndChooseVSInstance()
 }
 
 int cmVSSetupAPIHelper::ChooseVSInstance(
-  const std::vector<VSInstanceInfo>& vecVSInstances)
+  std::vector<VSInstanceInfo> const& vecVSInstances)
 {
   if (vecVSInstances.empty()) {
     return -1;
@@ -527,25 +527,25 @@ int cmVSSetupAPIHelper::ChooseVSInstance(
 
   unsigned int chosenIndex = 0;
   for (unsigned int i = 1; i < vecVSInstances.size(); i++) {
-    // If the current has Win10 SDK but not the chosen one, then choose the
-    // current VS instance
+    // If the current instance has Win10 SDK, but the chosen one does not,
+    // then choose the current VS instance.
     if (!vecVSInstances[chosenIndex].IsWin10SDKInstalled &&
         vecVSInstances[i].IsWin10SDKInstalled) {
       chosenIndex = i;
       continue;
     }
 
-    // If the chosen one has Win10 SDK but the current one is not, then look at
-    // the next VS instance even the current
-    // instance version may be higher
+    // If the chosen instance has Win10 SDK, but the current one does not,
+    // then look at the next VS instance even if the current instance version
+    // may be higher.
     if (vecVSInstances[chosenIndex].IsWin10SDKInstalled &&
         !vecVSInstances[i].IsWin10SDKInstalled) {
       continue;
     }
 
-    // If both chosen one and current one doesn't have Win10 SDK but the
-    // current one has Win8.1 SDK installed,
-    // then choose the current one
+    // If both chosen instance and current instance do not have Win10 SDK,
+    // but the current one has Win8.1 SDK installed, then choose the current
+    // one.
     if (!vecVSInstances[chosenIndex].IsWin10SDKInstalled &&
         !vecVSInstances[i].IsWin10SDKInstalled &&
         !vecVSInstances[chosenIndex].IsWin81SDKInstalled &&

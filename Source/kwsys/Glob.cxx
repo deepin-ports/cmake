@@ -8,6 +8,7 @@
 #include KWSYS_HEADER(RegularExpression.hxx)
 #include KWSYS_HEADER(SystemTools.hxx)
 #include KWSYS_HEADER(Directory.hxx)
+#include KWSYS_HEADER(String.h)
 
 // Work-around CMake dependency scanning limitation.  This must
 // duplicate the above list of headers.
@@ -16,6 +17,7 @@
 #  include "Directory.hxx.in"
 #  include "Glob.hxx.in"
 #  include "RegularExpression.hxx.in"
+#  include "String.h.in"
 #  include "SystemTools.hxx.in"
 #endif
 
@@ -23,11 +25,10 @@
 #include <string>
 #include <vector>
 
-#include <cctype>
 #include <cstdio>
 #include <cstring>
 namespace KWSYS_NAMESPACE {
-#if defined(_WIN32) || defined(__APPLE__)
+#if defined(_WIN32) || defined(__CYGWIN__) || defined(__APPLE__)
 // On Windows and Apple, no difference between lower and upper case
 #  define KWSYS_GLOB_CASE_INDEPENDENT
 #endif
@@ -70,7 +71,7 @@ std::vector<std::string>& Glob::GetFiles()
   return this->Internals->Files;
 }
 
-std::string Glob::PatternToRegex(const std::string& pattern,
+std::string Glob::PatternToRegex(std::string const& pattern,
                                  bool require_whole_string, bool preserve_case)
 {
   // Incrementally build the regular expression from the pattern.
@@ -162,7 +163,7 @@ std::string Glob::PatternToRegex(const std::string& pattern,
         // On case-insensitive systems file names are converted to lower
         // case before matching.
         if (!preserve_case) {
-          ch = tolower(ch);
+          ch = kwsysString_tolower(ch);
         }
       }
 #endif
@@ -179,7 +180,7 @@ std::string Glob::PatternToRegex(const std::string& pattern,
 }
 
 bool Glob::RecurseDirectory(std::string::size_type start,
-                            const std::string& dir, GlobMessages* messages)
+                            std::string const& dir, GlobMessages* messages)
 {
   kwsys::Directory d;
   std::string errorMessage;
@@ -281,7 +282,7 @@ bool Glob::RecurseDirectory(std::string::size_type start,
 }
 
 void Glob::ProcessDirectory(std::string::size_type start,
-                            const std::string& dir, GlobMessages* messages)
+                            std::string const& dir, GlobMessages* messages)
 {
   // std::cout << "ProcessDirectory: " << dir << std::endl;
   bool last = (start == this->Internals->Expressions.size() - 1);
@@ -341,7 +342,7 @@ void Glob::ProcessDirectory(std::string::size_type start,
   }
 }
 
-bool Glob::FindFiles(const std::string& inexpr, GlobMessages* messages)
+bool Glob::FindFiles(std::string const& inexpr, GlobMessages* messages)
 {
   std::string cexpr;
   std::string::size_type cc;
@@ -422,12 +423,12 @@ bool Glob::FindFiles(const std::string& inexpr, GlobMessages* messages)
   return true;
 }
 
-void Glob::AddExpression(const std::string& expr)
+void Glob::AddExpression(std::string const& expr)
 {
   this->Internals->Expressions.emplace_back(this->PatternToRegex(expr));
 }
 
-void Glob::SetRelative(const char* dir)
+void Glob::SetRelative(char const* dir)
 {
   if (!dir) {
     this->Relative = "";
@@ -436,7 +437,7 @@ void Glob::SetRelative(const char* dir)
   this->Relative = dir;
 }
 
-const char* Glob::GetRelative()
+char const* Glob::GetRelative()
 {
   if (this->Relative.empty()) {
     return nullptr;
@@ -444,7 +445,7 @@ const char* Glob::GetRelative()
   return this->Relative.c_str();
 }
 
-void Glob::AddFile(std::vector<std::string>& files, const std::string& file)
+void Glob::AddFile(std::vector<std::string>& files, std::string const& file)
 {
   if (!this->Relative.empty()) {
     files.push_back(kwsys::SystemTools::RelativePath(this->Relative, file));

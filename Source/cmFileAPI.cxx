@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmFileAPI.h"
 
 #include <algorithm>
@@ -28,6 +28,20 @@
 #include "cmSystemTools.h"
 #include "cmTimestamp.h"
 #include "cmake.h"
+
+#if defined(__clang__) && defined(__has_warning)
+#  if __has_warning("-Wrange-loop-analysis")
+#    if defined(__apple_build_version__)
+#      if __apple_build_version__ < 13000000
+#        define CM_CLANG_SUPPRESS_WARN_RANGE_LOOP_ANALYSIS
+#      endif
+#    else
+#      if __clang_major__ < 11
+#        define CM_CLANG_SUPPRESS_WARN_RANGE_LOOP_ANALYSIS
+#      endif
+#    endif
+#  endif
+#endif
 
 cmFileAPI::cmFileAPI(cmake* cm)
   : CMakeInstance(cm)
@@ -58,7 +72,8 @@ void cmFileAPI::ReadQueries()
 {
   std::string const query_dir = cmStrCat(this->APIv1, "/query");
   std::string const user_query_dir = cmStrCat(this->UserAPIv1, "/query");
-  this->QueryExists = cmSystemTools::FileIsDirectory(query_dir);
+  this->QueryExists =
+    this->QueryExists || cmSystemTools::FileIsDirectory(query_dir);
   if (!this->UserAPIv1.empty()) {
     this->QueryExists =
       this->QueryExists || cmSystemTools::FileIsDirectory(user_query_dir);
@@ -85,11 +100,18 @@ void cmFileAPI::ReadQueries()
   }
 }
 
-std::vector<unsigned long> cmFileAPI::GetConfigureLogVersions()
+std::vector<unsigned int> cmFileAPI::GetConfigureLogVersions()
 {
-  std::vector<unsigned long> versions;
+  std::vector<unsigned int> versions;
   auto getConfigureLogVersions = [&versions](Query const& q) {
-    for (Object const& o : q.Known) {
+#ifdef CM_CLANG_SUPPRESS_WARN_RANGE_LOOP_ANALYSIS
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wrange-loop-analysis"
+#endif
+    for (Object const o : q.Known) {
+#ifdef CM_CLANG_SUPPRESS_WARN_RANGE_LOOP_ANALYSIS
+#  pragma clang diagnostic pop
+#endif
       if (o.Kind == ObjectKind::ConfigureLog) {
         versions.emplace_back(o.Version);
       }
@@ -105,14 +127,20 @@ std::vector<unsigned long> cmFileAPI::GetConfigureLogVersions()
   return versions;
 }
 
-void cmFileAPI::WriteReplies()
+void cmFileAPI::WriteReplies(IndexFor indexFor)
 {
+  bool const success = indexFor == IndexFor::Success;
+  this->ReplyIndexFor = indexFor;
+
   if (this->QueryExists) {
     cmSystemTools::MakeDirectory(this->APIv1 + "/reply");
-    this->WriteJsonFile(this->BuildReplyIndex(), "index", ComputeSuffixTime);
+    this->WriteJsonFile(this->BuildReplyIndex(), success ? "index" : "error",
+                        ComputeSuffixTime);
   }
 
-  this->RemoveOldReplyFiles();
+  if (success) {
+    this->RemoveOldReplyFiles();
+  }
 }
 
 std::vector<std::string> cmFileAPI::LoadDir(std::string const& dir)
@@ -120,7 +148,7 @@ std::vector<std::string> cmFileAPI::LoadDir(std::string const& dir)
   std::vector<std::string> files;
   cmsys::Directory d;
   d.Load(dir);
-  for (unsigned long i = 0; i < d.GetNumberOfFiles(); ++i) {
+  for (unsigned int i = 0; i < d.GetNumberOfFiles(); ++i) {
     std::string f = d.GetFile(i);
     if (f != "." && f != "..") {
       files.push_back(std::move(f));
@@ -136,7 +164,7 @@ void cmFileAPI::RemoveOldReplyFiles()
   std::vector<std::string> files = this->LoadDir(reply_dir);
   for (std::string const& f : files) {
     if (this->ReplyFiles.find(f) == this->ReplyFiles.end()) {
-      std::string file = cmStrCat(reply_dir, "/", f);
+      std::string file = cmStrCat(reply_dir, '/', f);
       cmSystemTools::RemoveFile(file);
     }
   }
@@ -200,7 +228,28 @@ std::string cmFileAPI::WriteJsonFile(
   }
 
   // Compute the final name for the file.
-  fileName = prefix + "-" + computeSuffix(tmpFile) + ".json";
+  std::string suffix = computeSuffix(tmpFile);
+  std::string suffixWithExtension = cmStrCat('-', suffix, ".json");
+  fileName = cmStrCat(prefix, suffixWithExtension);
+
+  // Truncate the file name length
+  // eCryptFS has a maximal file name length recommendation of 140
+  size_t const maxFileNameLength = 140;
+  size_t const fileNameLength = fileName.size();
+  if (fileNameLength > maxFileNameLength) {
+    size_t const newHashLength = 20;
+    size_t const newSuffixLength =
+      suffixWithExtension.size() - suffix.size() + newHashLength;
+    size_t const overLength =
+      fileNameLength - maxFileNameLength + newSuffixLength;
+    size_t const startPos = fileNameLength - overLength;
+    std::string const toBeRemoved = fileName.substr(startPos, overLength);
+    suffix = cmCryptoHash(cmCryptoHash::AlgoSHA256)
+               .HashString(toBeRemoved)
+               .substr(0, newHashLength);
+    suffixWithExtension = cmStrCat('-', suffix, ".json");
+    fileName.replace(startPos, overLength, suffixWithExtension);
+  }
 
   // Create the destination.
   std::string file = this->APIv1 + "/reply";
@@ -343,7 +392,7 @@ bool cmFileAPI::ReadQuery(std::string const& query,
 void cmFileAPI::ReadClient(std::string const& client)
 {
   // Load queries for the client.
-  std::string clientDir = this->APIv1 + "/query/" + client;
+  std::string clientDir = cmStrCat(this->APIv1, "/query/", client);
   std::vector<std::string> queries = this->LoadDir(clientDir);
 
   // Read the queries and save for later.
@@ -361,7 +410,8 @@ void cmFileAPI::ReadClient(std::string const& client)
 void cmFileAPI::ReadClientQuery(std::string const& client, ClientQueryJson& q)
 {
   // Read the query.json file.
-  std::string queryFile = this->APIv1 + "/query/" + client + "/query.json";
+  std::string queryFile =
+    cmStrCat(this->APIv1, "/query/", client, "/query.json");
   Json::Value query;
   if (!this->ReadJsonFile(queryFile, query, q.Error)) {
     return;
@@ -419,15 +469,39 @@ Json::Value cmFileAPI::BuildCMake()
 Json::Value cmFileAPI::BuildReply(Query const& q)
 {
   Json::Value reply = Json::objectValue;
-  for (Object const& o : q.Known) {
+#ifdef CM_CLANG_SUPPRESS_WARN_RANGE_LOOP_ANALYSIS
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wrange-loop-analysis"
+#endif
+  for (Object const o : q.Known) {
+#ifdef CM_CLANG_SUPPRESS_WARN_RANGE_LOOP_ANALYSIS
+#  pragma clang diagnostic pop
+#endif
     std::string const& name = ObjectName(o);
-    reply[name] = this->AddReplyIndexObject(o);
+    reply[name] = this->BuildReplyEntry(o);
   }
 
   for (std::string const& name : q.Unknown) {
     reply[name] = cmFileAPI::BuildReplyError("unknown query file");
   }
   return reply;
+}
+
+Json::Value cmFileAPI::BuildReplyEntry(Object object)
+{
+  if (this->ReplyIndexFor != IndexFor::Success) {
+    switch (object.Kind) {
+      case ObjectKind::ConfigureLog:
+        break;
+      case ObjectKind::CodeModel:
+      case ObjectKind::Cache:
+      case ObjectKind::CMakeFiles:
+      case ObjectKind::Toolchains:
+      case ObjectKind::InternalTest:
+        return this->BuildReplyError("no buildsystem generated");
+    }
+  }
+  return this->AddReplyIndexObject(object);
 }
 
 Json::Value cmFileAPI::BuildReplyError(std::string const& error)
@@ -437,7 +511,7 @@ Json::Value cmFileAPI::BuildReplyError(std::string const& error)
   return e;
 }
 
-Json::Value const& cmFileAPI::AddReplyIndexObject(Object const& o)
+Json::Value const& cmFileAPI::AddReplyIndexObject(Object o)
 {
   Json::Value& indexEntry = this->ReplyIndexObjects[o];
   if (!indexEntry.isNull()) {
@@ -457,10 +531,10 @@ Json::Value const& cmFileAPI::AddReplyIndexObject(Object const& o)
   return indexEntry;
 }
 
-const char* cmFileAPI::ObjectKindName(ObjectKind kind)
+char const* cmFileAPI::ObjectKindName(ObjectKind kind)
 {
   // Keep in sync with ObjectKind enum.
-  static const char* objectKindNames[] = {
+  static char const* objectKindNames[] = {
     "codemodel",    //
     "configureLog", //
     "cache",        //
@@ -471,7 +545,7 @@ const char* cmFileAPI::ObjectKindName(ObjectKind kind)
   return objectKindNames[static_cast<size_t>(kind)];
 }
 
-std::string cmFileAPI::ObjectName(Object const& o)
+std::string cmFileAPI::ObjectName(Object o)
 {
   std::string name = cmStrCat(ObjectKindName(o.Kind), "-v", o.Version);
   return name;
@@ -485,7 +559,7 @@ Json::Value cmFileAPI::BuildVersion(unsigned int major, unsigned int minor)
   return version;
 }
 
-Json::Value cmFileAPI::BuildObject(Object const& object)
+Json::Value cmFileAPI::BuildObject(Object object)
 {
   Json::Value value;
 
@@ -568,7 +642,7 @@ cmFileAPI::ClientRequest cmFileAPI::BuildClientRequest(
   } else if (kindName == this->ObjectKindName(ObjectKind::InternalTest)) {
     r.Kind = ObjectKind::InternalTest;
   } else {
-    r.Error = "unknown request kind '" + kindName + "'";
+    r.Error = cmStrCat("unknown request kind '", kindName, '\'');
     return r;
   }
 
@@ -660,7 +734,7 @@ Json::Value cmFileAPI::BuildClientReplyResponse(ClientRequest const& request)
     response = this->BuildReplyError(request.Error);
     return response;
   }
-  response = this->AddReplyIndexObject(request);
+  response = this->BuildReplyEntry(request);
   return response;
 }
 
@@ -745,8 +819,10 @@ std::string cmFileAPI::NoSupportedVersion(
 
 // The "codemodel" object kind.
 
-// Update Help/manual/cmake-file-api.7.rst when updating this constant.
-static unsigned int const CodeModelV2Minor = 7;
+// Update the following files as well when updating this constant:
+//   Help/manual/cmake-file-api.7.rst
+//   Tests/RunCMake/FileAPI/codemodel-v2-check.py (check_objects())
+static unsigned int const CodeModelV2Minor = 10;
 
 void cmFileAPI::BuildClientRequestCodeModel(
   ClientRequest& r, std::vector<RequestVersion> const& versions)
@@ -763,9 +839,11 @@ void cmFileAPI::BuildClientRequestCodeModel(
   }
 }
 
-Json::Value cmFileAPI::BuildCodeModel(Object const& object)
+Json::Value cmFileAPI::BuildCodeModel(Object object)
 {
-  Json::Value codemodel = cmFileAPICodemodelDump(*this, object.Version);
+  assert(object.Version == 2);
+  Json::Value codemodel =
+    cmFileAPICodemodelDump(*this, object.Version, CodeModelV2Minor);
   codemodel["kind"] = this->ObjectKindName(object.Kind);
 
   Json::Value& version = codemodel["version"];
@@ -798,7 +876,7 @@ void cmFileAPI::BuildClientRequestConfigureLog(
   }
 }
 
-Json::Value cmFileAPI::BuildConfigureLog(Object const& object)
+Json::Value cmFileAPI::BuildConfigureLog(Object object)
 {
   Json::Value configureLog = cmFileAPIConfigureLogDump(*this, object.Version);
   configureLog["kind"] = this->ObjectKindName(object.Kind);
@@ -832,7 +910,7 @@ void cmFileAPI::BuildClientRequestCache(
   }
 }
 
-Json::Value cmFileAPI::BuildCache(Object const& object)
+Json::Value cmFileAPI::BuildCache(Object object)
 {
   Json::Value cache = cmFileAPICacheDump(*this, object.Version);
   cache["kind"] = this->ObjectKindName(object.Kind);
@@ -866,7 +944,7 @@ void cmFileAPI::BuildClientRequestCMakeFiles(
   }
 }
 
-Json::Value cmFileAPI::BuildCMakeFiles(Object const& object)
+Json::Value cmFileAPI::BuildCMakeFiles(Object object)
 {
   Json::Value cmakeFiles = cmFileAPICMakeFilesDump(*this, object.Version);
   cmakeFiles["kind"] = this->ObjectKindName(object.Kind);
@@ -883,7 +961,7 @@ Json::Value cmFileAPI::BuildCMakeFiles(Object const& object)
 
 // The "toolchains" object kind.
 
-static unsigned int const ToolchainsV1Minor = 0;
+static unsigned int const ToolchainsV1Minor = 1;
 
 void cmFileAPI::BuildClientRequestToolchains(
   ClientRequest& r, std::vector<RequestVersion> const& versions)
@@ -900,7 +978,7 @@ void cmFileAPI::BuildClientRequestToolchains(
   }
 }
 
-Json::Value cmFileAPI::BuildToolchains(Object const& object)
+Json::Value cmFileAPI::BuildToolchains(Object object)
 {
   Json::Value toolchains = cmFileAPIToolchainsDump(*this, object.Version);
   toolchains["kind"] = this->ObjectKindName(object.Kind);
@@ -936,7 +1014,7 @@ void cmFileAPI::BuildClientRequestInternalTest(
   }
 }
 
-Json::Value cmFileAPI::BuildInternalTest(Object const& object)
+Json::Value cmFileAPI::BuildInternalTest(Object object)
 {
   Json::Value test = Json::objectValue;
   test["kind"] = this->ObjectKindName(object.Kind);

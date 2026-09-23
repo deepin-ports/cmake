@@ -1,6 +1,8 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmCurl.h"
+
+#include <utility>
 
 #include <cm/string_view>
 #include <cmext/string_view>
@@ -28,9 +30,9 @@
 #define check_curl_result(result, errstr)                                     \
   do {                                                                        \
     if ((result) != CURLE_OK && (result) != CURLE_NOT_BUILT_IN) {             \
-      e += e.empty() ? "" : "\n";                                             \
-      e += (errstr);                                                          \
-      e += ::curl_easy_strerror(result);                                      \
+      bool isNeedNewline = !e.empty();                                        \
+      e = cmStrCat(std::move(e), isNeedNewline ? "\n"_s : ""_s, (errstr),     \
+                   ::curl_easy_strerror(result));                             \
     }                                                                         \
   } while (false)
 
@@ -48,21 +50,16 @@
 // Do this only for our vendored curl to avoid breaking builds
 // against external future versions of curl.
 #if !defined(CMAKE_USE_SYSTEM_CURL)
+// NOLINTNEXTLINE(misc-redundant-expression)
 static_assert(CURL_SSLVERSION_LAST == 8,
               "A new CURL_SSLVERSION_ may be available!");
 #endif
 
-void cmCurlInitOnce()
+::CURLcode cm_curl_global_init(long flags)
 {
   // curl 7.56.0 introduced curl_global_sslset.
 #if defined(__APPLE__) && defined(CMAKE_USE_SYSTEM_CURL) &&                   \
   defined(LIBCURL_VERSION_NUM) && LIBCURL_VERSION_NUM >= 0x073800
-  static bool initialized = false;
-  if (initialized) {
-    return;
-  }
-  initialized = true;
-
   cm::optional<std::string> curl_ssl_backend =
     cmSystemTools::GetEnvVar("CURL_SSL_BACKEND");
   if (!curl_ssl_backend || curl_ssl_backend->empty()) {
@@ -70,10 +67,27 @@ void cmCurlInitOnce()
     // curl 8.3.0 through 8.5.x did not re-initialize LibreSSL correctly,
     // so prefer the Secure Transport backend by default in those versions.
     if (cv->version_num >= 0x080300 && cv->version_num < 0x080600) {
+#  if defined(__clang__)
+#    define CM_CURL_DEPRECATED_CURLSSLBACKEND_SECURETRANSPORT_CLANG
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#  elif defined(__GNUC__)
+#    define CM_CURL_DEPRECATED_CURLSSLBACKEND_SECURETRANSPORT_GCC
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#  endif
       curl_global_sslset(CURLSSLBACKEND_SECURETRANSPORT, NULL, NULL);
+#  if defined(CM_CURL_DEPRECATED_CURLSSLBACKEND_SECURETRANSPORT_CLANG)
+#    undef CM_CURL_DEPRECATED_CURLSSLBACKEND_SECURETRANSPORT_CLANG
+#    pragma clang diagnostic pop
+#  elif defined(CM_CURL_DEPRECATED_CURLSSLBACKEND_SECURETRANSPORT_GCC)
+#    undef CM_CURL_DEPRECATED_CURLSSLBACKEND_SECURETRANSPORT_GCC
+#    pragma GCC diagnostic pop
+#  endif
     }
   }
 #endif
+  return ::curl_global_init(flags);
 }
 
 cm::optional<int> cmCurlParseTLSVersion(cm::string_view tls_version)
@@ -111,7 +125,7 @@ cm::optional<std::string> cmCurlPrintTLSVersion(int curl_tls_version)
   return s;
 }
 
-std::string cmCurlSetCAInfo(::CURL* curl, const std::string& cafile)
+std::string cmCurlSetCAInfo(::CURL* curl, std::string const& cafile)
 {
   std::string e;
   std::string env_ca;
@@ -161,16 +175,25 @@ std::string cmCurlSetCAInfo(::CURL* curl, const std::string& cafile)
     }
 #    undef CMAKE_CAPATH_AIX
 #  endif
+#  ifdef __sun
+#    define CMAKE_CAPATH_SUNOS_CSW "/etc/opt/csw/ssl/certs"
+    if (cmSystemTools::FileIsDirectory(CMAKE_CAPATH_SUNOS_CSW)) {
+      ::CURLcode res =
+        ::curl_easy_setopt(curl, CURLOPT_CAPATH, CMAKE_CAPATH_SUNOS_CSW);
+      check_curl_result(res, "Unable to set TLS/SSL Verify CAPATH: ");
+    }
+#    undef CMAKE_CAPATH_SUNOS_CSW
+#  endif
   }
 #endif
   return e;
 }
 
-std::string cmCurlSetNETRCOption(::CURL* curl, const std::string& netrc_level,
-                                 const std::string& netrc_file)
+std::string cmCurlSetNETRCOption(::CURL* curl, std::string const& netrc_level,
+                                 std::string const& netrc_file)
 {
   std::string e;
-  CURL_NETRC_OPTION curl_netrc_level = CURL_NETRC_LAST;
+  long curl_netrc_level = CURL_NETRC_LAST;
   ::CURLcode res;
 
   if (!netrc_level.empty()) {
@@ -202,38 +225,6 @@ std::string cmCurlSetNETRCOption(::CURL* curl, const std::string& netrc_level,
     }
   }
   return e;
-}
-
-std::string cmCurlFixFileURL(std::string url)
-{
-  if (!cmHasLiteralPrefix(url, "file://")) {
-    return url;
-  }
-
-  // libcurl 7.77 and below accidentally allowed spaces in URLs in some cases.
-  // One such case was file:// URLs, which CMake has long accepted as a result.
-  // Explicitly encode spaces for a URL.
-  cmSystemTools::ReplaceString(url, " ", "%20");
-
-#if defined(_WIN32)
-  // libcurl doesn't support file:// urls for unicode filenames on Windows.
-  // Convert string from UTF-8 to ACP if this is a file:// URL.
-  std::wstring wurl = cmsys::Encoding::ToWide(url);
-  if (!wurl.empty()) {
-    int mblen = WideCharToMultiByte(CP_ACP, 0, wurl.c_str(), -1, nullptr, 0,
-                                    nullptr, nullptr);
-    if (mblen > 0) {
-      std::vector<char> chars(mblen);
-      mblen = WideCharToMultiByte(CP_ACP, 0, wurl.c_str(), -1, &chars[0],
-                                  mblen, nullptr, nullptr);
-      if (mblen > 0) {
-        url = &chars[0];
-      }
-    }
-  }
-#endif
-
-  return url;
 }
 
 ::CURL* cm_curl_easy_init()

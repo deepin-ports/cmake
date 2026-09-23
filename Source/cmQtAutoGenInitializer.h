@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #pragma once
 
 #include "cmConfigure.h" // IWYU pragma: keep
@@ -44,7 +44,8 @@ public:
     std::string QrcPathChecksum;
     std::string InfoFile;
     ConfigString SettingsFile;
-    std::string OutputFile;
+    ConfigString OutputFile;
+    std::string OutputFileGenex;
     bool Generated = false;
     bool Unique = false;
     std::vector<std::string> Options;
@@ -93,7 +94,7 @@ public:
 
   cmQtAutoGenInitializer(cmQtAutoGenGlobalInitializer* globalInitializer,
                          cmGeneratorTarget* genTarget,
-                         IntegerVersion const& qtVersion, bool mocEnabled,
+                         IntegerVersion qtVersion, bool mocEnabled,
                          bool uicEnabled, bool rccEnabled,
                          bool globalAutogenTarget, bool globalAutoRccTarget);
 
@@ -135,11 +136,13 @@ private:
                        cm::string_view suffix);
   void ConfigFileNamesAndGenex(ConfigString& configString, std::string& genex,
                                cm::string_view prefix, cm::string_view suffix);
+  void ConfigFileNameCommon(ConfigString& configString,
+                            std::string const& fileName);
   void ConfigFileClean(ConfigString& configString);
 
   std::string GetMocBuildPath(MUFile const& muf);
 
-  bool GetQtExecutable(GenVarsT& genVars, const std::string& executable,
+  bool GetQtExecutable(GenVarsT& genVars, std::string const& executable,
                        bool ignoreMissingTarget) const;
 
   void handleSkipPch(cmSourceFile* sf);

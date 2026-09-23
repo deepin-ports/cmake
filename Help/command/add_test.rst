@@ -16,7 +16,7 @@ if necessary.  See policy :policy:`CMP0110`.
 
 CMake only generates tests if the :command:`enable_testing` command has been
 invoked.  The :module:`CTest` module invokes ``enable_testing`` automatically
-unless ``BUILD_TESTING`` is set to ``OFF``.
+unless :variable:`BUILD_TESTING` is set to ``OFF``.
 
 Tests added with the ``add_test(NAME)`` signature support using
 :manual:`generator expressions <cmake-generator-expressions(7)>`
@@ -114,4 +114,5 @@ Add a test called ``<name>`` with the given command-line.
 Unlike the above ``NAME`` signature, target names are not supported
 in the command-line.  Furthermore, tests added with this signature do not
 support :manual:`generator expressions <cmake-generator-expressions(7)>`
-in the command-line or test properties.
+in the command-line or test properties, and the :prop_tgt:`TEST_LAUNCHER`
+and :prop_tgt:`CROSSCOMPILING_EMULATOR` target properties are not supported.

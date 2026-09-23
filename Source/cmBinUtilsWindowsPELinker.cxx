@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 
 #include "cmBinUtilsWindowsPELinker.h"
 
@@ -155,6 +155,7 @@ bool cmBinUtilsWindowsPELinker::ResolveDependency(std::string const& name,
   for (auto const& searchPath : dirs) {
     path = cmStrCat(searchPath, '/', name);
     if (cmSystemTools::PathExists(path)) {
+      this->NormalizePath(path);
       resolved = true;
       return true;
     }

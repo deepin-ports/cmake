@@ -1,14 +1,15 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmExportTryCompileFileGenerator.h"
 
 #include <map>
 #include <utility>
 
 #include <cm/memory>
-#include <cm/string_view>
+#include <cmext/string_view>
 
 #include "cmFileSet.h"
+#include "cmGenExContext.h"
 #include "cmGeneratorExpression.h"
 #include "cmGeneratorExpressionDAGChecker.h"
 #include "cmGeneratorTarget.h"
@@ -16,14 +17,13 @@
 #include "cmList.h"
 #include "cmLocalGenerator.h"
 #include "cmMakefile.h"
+#include "cmMessageType.h"
 #include "cmOutputConverter.h"
 #include "cmStateTypes.h"
 #include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
 #include "cmTarget.h"
 #include "cmValue.h"
-
-class cmTargetExport;
 
 cmExportTryCompileFileGenerator::cmExportTryCompileFileGenerator(
   cmGlobalGenerator* gg, std::vector<std::string> const& targets,
@@ -33,10 +33,25 @@ cmExportTryCompileFileGenerator::cmExportTryCompileFileGenerator(
   gg->CreateImportedGenerationObjects(mf, targets, this->Exports);
 }
 
-void cmExportTryCompileFileGenerator::ReportError(
-  std::string const& errorMessage) const
+void cmExportTryCompileFileGenerator::IssueMessage(
+  MessageType type, std::string const& message) const
 {
-  cmSystemTools::Error(errorMessage);
+  switch (type) {
+    case MessageType::FATAL_ERROR:
+    case MessageType::AUTHOR_ERROR:
+    case MessageType::INTERNAL_ERROR:
+    case MessageType::DEPRECATION_ERROR:
+      cmSystemTools::Error(message);
+      break;
+    case MessageType::WARNING:
+    case MessageType::AUTHOR_WARNING:
+    case MessageType::DEPRECATION_WARNING:
+      cmSystemTools::Message(cmStrCat("CMake Warning: "_s, message),
+                             "Warning");
+      break;
+    default:
+      cmSystemTools::Message(message);
+  }
 }
 
 bool cmExportTryCompileFileGenerator::GenerateMainFile(std::ostream& os)
@@ -76,6 +91,8 @@ std::string cmExportTryCompileFileGenerator::FindTargets(
     return std::string();
   }
 
+  cm::GenEx::Context context(tgt->LocalGenerator, this->Config, language);
+
   cmGeneratorExpression ge(*tgt->Makefile->GetCMakeInstance());
 
   std::unique_ptr<cmGeneratorExpressionDAGChecker> parentDagChecker;
@@ -83,23 +100,22 @@ std::string cmExportTryCompileFileGenerator::FindTargets(
     // To please constraint checks of DAGChecker, this property must have
     // LINK_OPTIONS property as parent
     parentDagChecker = cm::make_unique<cmGeneratorExpressionDAGChecker>(
-      tgt, "LINK_OPTIONS", nullptr, nullptr, tgt->GetLocalGenerator(),
-      this->Config);
+      tgt, "LINK_OPTIONS", nullptr, nullptr, context);
   }
-  cmGeneratorExpressionDAGChecker dagChecker(
-    tgt, propName, nullptr, parentDagChecker.get(), tgt->GetLocalGenerator(),
-    this->Config);
+  cmGeneratorExpressionDAGChecker dagChecker{
+    tgt, propName, nullptr, parentDagChecker.get(), context,
+  };
 
   std::unique_ptr<cmCompiledGeneratorExpression> cge = ge.Parse(*prop);
 
   cmTarget dummyHead("try_compile_dummy_exe", cmStateEnums::EXECUTABLE,
                      cmTarget::Visibility::Normal, tgt->Target->GetMakefile(),
                      cmTarget::PerConfig::Yes);
+  dummyHead.SetIsForTryCompile();
 
   cmGeneratorTarget gDummyHead(&dummyHead, tgt->GetLocalGenerator());
 
-  std::string result = cge->Evaluate(tgt->GetLocalGenerator(), this->Config,
-                                     &gDummyHead, &dagChecker, tgt, language);
+  std::string result = cge->Evaluate(context, &dagChecker, &gDummyHead, tgt);
 
   std::set<cmGeneratorTarget const*> const& allTargets =
     cge->GetAllTargetsSeen();

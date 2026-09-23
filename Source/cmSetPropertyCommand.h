@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #pragma once
 
 #include "cmConfigure.h" // IWYU pragma: keep
@@ -10,11 +10,25 @@
 class cmMakefile;
 class cmExecutionStatus;
 class cmSourceFile;
+class cmTarget;
 
 bool cmSetPropertyCommand(std::vector<std::string> const& args,
                           cmExecutionStatus& status);
 
 namespace SetPropertyCommand {
+bool HandleFileSetTargetScopes(cmExecutionStatus& status,
+                               std::string& file_set_target_name,
+                               cmTarget*& file_set_target);
+
+bool HandleFileSetTargetScopeValidation(cmExecutionStatus& status,
+                                        bool file_set_target_option_enabled,
+                                        std::string& file_set_target_name);
+
+bool HandleAndValidateFileSetTargetScopes(cmExecutionStatus& status,
+                                          bool file_set_target_option_enabled,
+                                          std::string& file_set_target_name,
+                                          cmTarget*& file_set_target);
+
 bool HandleSourceFileDirectoryScopes(
   cmExecutionStatus& status, std::vector<std::string>& source_file_directories,
   std::vector<std::string>& source_file_target_directories,
@@ -46,7 +60,7 @@ bool HandleAndValidateTestDirectoryScopes(
   std::string& test_directory, cmMakefile*& test_directory_makefile);
 
 std::string MakeSourceFilePathAbsoluteIfNeeded(
-  cmExecutionStatus& status, const std::string& source_file_path, bool needed);
+  cmExecutionStatus& status, std::string const& source_file_path, bool needed);
 void MakeSourceFilePathsAbsoluteIfNeeded(
   cmExecutionStatus& status,
   std::vector<std::string>& source_files_absolute_paths,

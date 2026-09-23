@@ -1,5 +1,6 @@
 #!/usr/bin/make -f
 
+include /usr/share/dpkg/architecture.mk
 include /usr/share/dpkg/pkg-info.mk
 
 # Do not build with link-time optimization, cf. https://bugs.debian.org/1034873
@@ -7,7 +8,6 @@ export DEB_BUILD_MAINT_OPTIONS := optimize=-lto hardening=+all
 
 export DEB_CXXFLAGS_MAINT_APPEND := $(shell dpkg-buildflags --get CPPFLAGS)
 export DEB_CFLAGS_MAINT_APPEND := $(shell dpkg-buildflags --get CPPFLAGS)
-export DEB_LDFLAGS_MAINT_APPEND := -Wl,--as-needed
 
 
 BUILD_DATE = $(shell LC_ALL=C date -u "+%B %d, %Y" -d "@$(SOURCE_DATE_EPOCH)")
@@ -34,18 +34,21 @@ endif
 ifeq ($(DEB_HOST_ARCH_OS),hurd)
 	$(call $(flag_action),CMAKE_USE_LIBUV,0,"Do not use libuv")
 endif
+ifneq (,$(filter i386 hurd-i386,$(DEB_HOST_ARCH)))
+	$(call $(flag_action),CMake_TEST_NO_64BIT_TIME,ON,"Skip Timestamp2038 test")
+endif
 #	$(call $(flag_action),BUILD_DOCUMENTATION,ON)
 
 $(BUILD_FLAGS_FILE): flag_action := set_build_flag
 verify-build-flags: flag_action := verify_build_flag
 .PHONY: verify-build-flags
 
-BOOTSTRAP_FLAGS = --prefix=/usr --docdir=/share/doc/cmake-data --mandir=/share/man \
+BOOTSTRAP_FLAGS = --prefix=/usr --docdir=/share/doc/cmake --mandir=/share/man \
                   --sphinx-man --sphinx-html --sphinx-flags="-D today=\"$(BUILD_DATE)\"" \
                   --init=../$(BUILD_FLAGS_FILE) --verbose
 
 CROSS_CMAKE_FLAGS = -C../$(BUILD_FLAGS_FILE) \
-                    -DCMAKE_DOC_DIR=share/doc/cmake-data \
+                    -DCMAKE_DOC_DIR=share/doc/cmake \
                     -DCMAKE_MAN_DIR=share/man \
                     -DSPHINX_HTML=ON -DSPHINX_MAN=ON \
                     -DSPHINX_FLAGS="-D today=\"$(BUILD_DATE)\""
@@ -63,6 +66,7 @@ endif
 
 override_dh_auto_configure: $(BUILD_FLAGS_FILE)
 ifeq (,$(filter cross,$(DEB_BUILD_PROFILES)))
+	@echo 'blhc: ignore-line-regexp: .* (?:has|does not have) .*'
 	rm -rf Build && mkdir -p Build
 	cd Build && ../bootstrap $(BOOTSTRAP_FLAGS)
 else
@@ -70,26 +74,41 @@ else
 		$(CROSS_CMAKE_FLAGS)
 endif
 
-EXCLUDED_TESTS = CTestTestUpload\|curl
+EXCLUDED_TESTS = \
+	CTestTestUpload \
+	curl
+
+ifneq ($(filter i386 hurd-i386,$(DEB_HOST_ARCH)),)
+# The tutorial assumes SSE capabilites beyond the Debian i386 baseline, which makes the test fail
+EXCLUDED_TESTS += RunCMake.Tutorial
+endif
+ifeq ($(DEB_HOST_ARCH_BITS),32)
+# zstd compression has an issue on 32 bit architectures (cf. #1131441)
+EXCLUDED_TESTS += RunCMake.CommandLineTar
+endif
+
+space = $(eval) $(eval)
+concat_with = $(subst $(space),$1,$2)
 
 override_dh_auto_test:
 	# Pass -j1 to "make test" as a workaround, see https://gitlab.kitware.com/cmake/cmake/issues/17165
 	# The tests are still run in parallel as -jX is passed via ARGS to ctest.
-	dh_auto_test --buildsystem=cmake -- -j1 ARGS="-E $(EXCLUDED_TESTS) --timeout 5000 -j$(NUMJOBS)"
+	#
+	# Remove CFLAGS, CXXFLAGS and LDFLAGS from the test environment,
+	# see https://gitlab.kitware.com/cmake/cmake/-/issues/26836
+	env -u CFLAGS -u CXXFLAGS -u LDFLAGS \
+		dh_auto_test --buildsystem=cmake -- -j1 ARGS="-E $(call concat_with,\|,$(EXCLUDED_TESTS)) --timeout 5000 -j$(NUMJOBS)"
 
 execute_after_dh_auto_clean:
 	rm -f $(BUILD_FLAGS_FILE)
 	find . -name __pycache__ -type d -print0 | xargs -r0 rm -r
-
-override_dh_installdocs-arch:
-	# dh_installdocs --link-doc generates binNMU unsafe deps (Bug #747141)
-	dh_installdocs
-
-override_dh_installdocs-indep:
-	dh_installdocs --link-doc=cmake-data
 
 override_dh_sphinxdoc:
 	dh_sphinxdoc -pcmake-doc
 
 %:
 	dh $@ --builddirectory=Build
+
+.PHONY: excluded-tests
+excluded-tests:
+	@echo $(call concat_with,\|,$(EXCLUDED_TESTS))

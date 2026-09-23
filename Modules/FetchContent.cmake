@@ -1,5 +1,5 @@
 # Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-# file Copyright.txt or https://cmake.org/licensing for details.
+# file LICENSE.rst or https://cmake.org/licensing for details.
 
 #[=======================================================================[.rst:
 FetchContent
@@ -10,6 +10,15 @@ FetchContent
 .. only:: html
 
   .. contents::
+
+This module provides commands to populate content at configure time or as
+part of the calling script.
+
+Load this module in CMake with:
+
+.. code-block:: cmake
+
+  include(FetchContent)
 
 .. note:: The :guide:`Using Dependencies Guide` provides a high-level
   introduction to this general topic. It provides a broader overview of
@@ -111,9 +120,10 @@ Commands
   The ``<contentOptions>`` can be any of the download, update, or patch options
   that the :command:`ExternalProject_Add` command understands.  The configure,
   build, install, and test steps are explicitly disabled, so options related
-  to those steps will be ignored.  The ``SOURCE_SUBDIR`` option is an
-  exception, see :command:`FetchContent_MakeAvailable` for details on how that
-  affects behavior.
+  to those steps are prohibited and will be discarded if given.
+  The ``SOURCE_SUBDIR`` option is an exception, see
+  :command:`FetchContent_MakeAvailable` for details on how that affects
+  behavior.
 
   .. versionchanged:: 3.30
     When policy :policy:`CMP0168` is set to ``NEW``, some output-related and
@@ -387,17 +397,20 @@ Commands
     FetchContent_Declare(other ...)
     FetchContent_MakeAvailable(uses_other other)
 
-  Note that :variable:`CMAKE_VERIFY_INTERFACE_HEADER_SETS` is explicitly set
-  to false upon entry to ``FetchContent_MakeAvailable()``, and is restored to
-  its original value before the command returns.  Developers typically only
+  Note that :variable:`CMAKE_VERIFY_INTERFACE_HEADER_SETS` and
+  :variable:`CMAKE_VERIFY_PRIVATE_HEADER_SETS` are explicitly set to false
+  upon entry to ``FetchContent_MakeAvailable()``, and are restored to their
+  original values before the command returns.  Developers typically only
   want to verify header sets from the main project, not those from any
   dependencies.  This local manipulation of the
-  :variable:`CMAKE_VERIFY_INTERFACE_HEADER_SETS` variable provides that
+  :variable:`CMAKE_VERIFY_INTERFACE_HEADER_SETS` and
+  :variable:`CMAKE_VERIFY_PRIVATE_HEADER_SETS` variables provides that
   intuitive behavior.  You can use variables like
   :variable:`CMAKE_PROJECT_INCLUDE` or
   :variable:`CMAKE_PROJECT_<PROJECT-NAME>_INCLUDE` to turn verification back
   on for all or some dependencies.  You can also set the
-  :prop_tgt:`VERIFY_INTERFACE_HEADER_SETS` property of individual targets.
+  :prop_tgt:`VERIFY_INTERFACE_HEADER_SETS` and
+  :prop_tgt:`VERIFY_PRIVATE_HEADER_SETS` properties of individual targets.
 
 .. command:: FetchContent_Populate
 
@@ -1128,7 +1141,7 @@ current working directory.
 # FetchContent_MakeAvailable() implementation details are excluded for
 # backward compatibility reasons (see just after the endblock()).
 block(SCOPE_FOR POLICIES)
-cmake_policy(VERSION 3.29)
+cmake_policy(VERSION 4.1)
 
 include(${CMAKE_CURRENT_LIST_DIR}/ExternalProject/shared_internal_commands.cmake)
 
@@ -1876,9 +1889,9 @@ ExternalProject_Add_Step(${contentName}-populate copyfile
 # Pass through things we've already detected in the main project to avoid
 # paying the cost of redetecting them again in ExternalProject_Add()
 set(GIT_EXECUTABLE [==[${GIT_EXECUTABLE}]==])
-set(GIT_VERSION_STRING [==[${GIT_VERSION_STRING}]==])
+set(Git_VERSION [==[${Git_VERSION}]==])
 set_property(GLOBAL PROPERTY _CMAKE_FindGit_GIT_EXECUTABLE_VERSION
-  [==[${GIT_EXECUTABLE};${GIT_VERSION_STRING}]==]
+  [==[${GIT_EXECUTABLE};${Git_VERSION}]==]
 )
 ")
   endif()
@@ -2230,12 +2243,14 @@ endfunction()
 # calls will be available to the caller.
 macro(FetchContent_MakeAvailable)
 
-  # We must append an item, even if the variable is unset, so prefix its value.
-  # We will strip that prefix when we pop the value at the end of the macro.
+  # We must append these, even if the variables are unset, so prefix the values.
+  # We will strip that prefix when we pop the values at the end of the macro.
   list(APPEND __cmake_fcCurrentVarsStack
     "__fcprefix__${CMAKE_VERIFY_INTERFACE_HEADER_SETS}"
+    "__fcprefix__${CMAKE_VERIFY_PRIVATE_HEADER_SETS}"
   )
   set(CMAKE_VERIFY_INTERFACE_HEADER_SETS FALSE)
+  set(CMAKE_VERIFY_PRIVATE_HEADER_SETS FALSE)
 
   get_property(__cmake_providerCommand GLOBAL PROPERTY
     __FETCHCONTENT_MAKEAVAILABLE_SERIAL_PROVIDER
@@ -2443,18 +2458,30 @@ macro(FetchContent_MakeAvailable)
   endforeach()
 
   # Prefix will be "__fcprefix__"
-  list(POP_BACK __cmake_fcCurrentVarsStack __cmake_original_verify_setting)
-  string(SUBSTRING "${__cmake_original_verify_setting}"
-    12 -1 __cmake_original_verify_setting
+  list(POP_BACK __cmake_fcCurrentVarsStack
+    __cmake_original_verify_private_setting
+    __cmake_original_verify_interface_setting
   )
-  set(CMAKE_VERIFY_INTERFACE_HEADER_SETS ${__cmake_original_verify_setting})
+  string(SUBSTRING "${__cmake_original_verify_private_setting}"
+    12 -1 __cmake_original_verify_private_setting
+  )
+  string(SUBSTRING "${__cmake_original_verify_interface_setting}"
+    12 -1 __cmake_original_verify_interface_setting
+  )
+  set(CMAKE_VERIFY_PRIVATE_HEADER_SETS
+    ${__cmake_original_verify_private_setting}
+  )
+  set(CMAKE_VERIFY_INTERFACE_HEADER_SETS
+    ${__cmake_original_verify_interface_setting}
+  )
 
   # clear local variables to prevent leaking into the caller's scope
   unset(__cmake_contentName)
   unset(__cmake_contentNameLower)
   unset(__cmake_contentNameUpper)
   unset(__cmake_providerCommand)
-  unset(__cmake_original_verify_setting)
+  unset(__cmake_original_verify_interface_setting)
+  unset(__cmake_original_verify_private_setting)
 
 endmacro()
 

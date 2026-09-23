@@ -1,6 +1,6 @@
 %{
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 /*
 
 This file must be translated to C and modified to build everywhere.
@@ -148,6 +148,9 @@ term:
     $<Number>$ = $<Number>1 / $<Number>3;
   }
 | term exp_MOD unary {
+    if (yyvsp[0].Number == 0) {
+      throw std::overflow_error("modulo by zero");
+    }
     $<Number>$ = $<Number>1 % $<Number>3;
   }
 

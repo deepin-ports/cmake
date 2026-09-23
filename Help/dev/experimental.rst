@@ -39,22 +39,25 @@ When activated, this experimental feature provides the following:
   using the ``CMAKE_EXPORT_FIND_PACKAGE_NAME`` variable and/or
 ``EXPORT_FIND_PACKAGE_NAME`` target property.
 
-Export |CPS| Package Information
-================================
+Export |CPS| Package Information for ``install(EXPORT)``
+========================================================
 
 In order to activate support for this experimental feature, set
 
-* variable ``CMAKE_EXPERIMENTAL_EXPORT_PACKAGE_INFO`` to
-* value ``b80be207-778e-46ba-8080-b23bba22639e``.
+* variable ``CMAKE_EXPERIMENTAL_MAPPED_PACKAGE_INFO`` to
+* value ``ababa1b5-7099-495f-a9cd-e22d38f274f2``.
 
-This UUID may change in future versions of CMake.  Be sure to use the value
+These UUIDs may change in future versions of CMake.  Be sure to use the values
 documented here by the source tree of the version of CMake with which you are
 experimenting.
 
 When activated, this experimental feature provides the following:
 
-* The experimental ``install(PACKAGE_INFO)`` command is available to export
-  package information in the |CPS|_ format.
+* Setting ``CMAKE_INSTALL_EXPORTS_AS_PACKAGE_INFO`` enables generation of
+  package information in the |CPS|_ format via the ``install(EXPORT)`` command.
+
+.. _CPS: https://cps-org.github.io/cps/
+.. |CPS| replace:: Common Package Specification
 
 C++ ``import std`` support
 ==========================
@@ -63,23 +66,20 @@ In order to activate support for ``import std`` in C++23 and newer targets,
 set
 
 * variable ``CMAKE_EXPERIMENTAL_CXX_IMPORT_STD`` to
-* value ``0e5b6991-d74f-4b3d-a41c-cf096e0b2508``.
+* value ``451f2fe2-a8a2-47c3-bc32-94786d8fc91b``.
 
 This UUID may change in future versions of CMake.  Be sure to use the value
 documented here by the source tree of the version of CMake with which you are
 experimenting.  It must be set before the ``CXX`` toolchain is discovered by
-CMake, usually as part of a :command:`project` call.
+CMake, usually as part of a ``project()`` call.
 
 When activated, this experimental feature provides the following:
 
-* The :prop_tgt:`CXX_MODULE_STD` target property and its initializing variable
-  :variable:`CMAKE_CXX_MODULE_STD`.
+* The ``CXX_MODULE_STD`` target property and its initializing variable
+  ``CMAKE_CXX_MODULE_STD``.
 
 * Targets with the property set to a true value and at least ``cxx_std_23``
   may use ``import std;`` in any scanned C++ source file.
-
-.. _CPS: https://cps-org.github.io/cps/
-.. |CPS| replace:: Common Package Specification
 
 Build database support
 ======================
@@ -87,7 +87,7 @@ Build database support
 In order to activate support for exporting build databases, set
 
 * variable ``CMAKE_EXPERIMENTAL_EXPORT_BUILD_DATABASE`` to
-* value ``4bd552e2-b7fb-429a-ab23-c83ef53f3f13``.
+* value ``73194a1d-c0b5-41b9-9190-a4512925e192``.
 
 This UUID may change in future versions of CMake.  Be sure to use the value
 documented here by the source tree of the version of CMake with which you are
@@ -101,3 +101,34 @@ When activated, this experimental feature provides the following:
 
 * Targets with the property set to a true value will have their C++ build
   information exported to the build database.
+
+Software Bill Of Materials |SBOM|
+=================================
+
+In order to activate support for the :command:`install(SBOM)` command,
+set
+
+* variable ``CMAKE_EXPERIMENTAL_GENERATE_SBOM`` to
+* value ``ca494ed3-b261-4205-a01f-603c95e4cae0``.
+
+This UUID may change in future versions of CMake.  Be sure to use the value
+documented here by the source tree of the version of CMake with which you are
+experimenting.
+
+When activated, this experimental feature provides the following:
+
+* The experimental ``export(SBOM)`` and ``install(SBOM)`` commands are
+  available to generate a Software Bill of Materials or "SBOM" for the current
+  project. See :command:`install(SBOM)` for a complete overview of the command.
+
+Rust Support
+============
+
+In order to activate support for Rust, set
+
+* variable ``CMAKE_EXPERIMENTAL_RUST`` to
+* value ``3cc9b32c-47d3-4056-8953-d74e69fc0d6c``.
+
+This UUID may change in future versions of CMake.  Be sure to use the value
+documented here by the source tree of the version of CMake with which you are
+experimenting.

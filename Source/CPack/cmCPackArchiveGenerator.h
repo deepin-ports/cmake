@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #pragma once
 
 #include "cmConfigure.h" // IWYU pragma: keep
@@ -24,12 +24,26 @@ public:
   using Superclass = cmCPackGenerator;
 
   static cmCPackGenerator* Create7ZGenerator();
+  static cmCPackGenerator* Create7ZStoreGenerator();
+  static cmCPackGenerator* Create7ZDeflateGenerator();
+  static cmCPackGenerator* Create7ZBzip2Generator();
+  static cmCPackGenerator* Create7ZLzmaGenerator();
+  static cmCPackGenerator* Create7ZLzma2Generator();
+  static cmCPackGenerator* Create7ZZstdGenerator();
+  static cmCPackGenerator* Create7ZPPMdGenerator();
   static cmCPackGenerator* CreateTBZ2Generator();
   static cmCPackGenerator* CreateTGZGenerator();
   static cmCPackGenerator* CreateTXZGenerator();
   static cmCPackGenerator* CreateTZGenerator();
   static cmCPackGenerator* CreateTZSTGenerator();
+  static cmCPackGenerator* CreateTarGenerator();
   static cmCPackGenerator* CreateZIPGenerator();
+  static cmCPackGenerator* CreateZipStoreGenerator();
+  static cmCPackGenerator* CreateZipDeflateGenerator();
+  static cmCPackGenerator* CreateZipBzip2Generator();
+  static cmCPackGenerator* CreateZipLzmaGenerator();
+  static cmCPackGenerator* CreateZipLzma2Generator();
+  static cmCPackGenerator* CreateZipZstdGenerator();
 
   /**
    * Construct generator
@@ -43,8 +57,9 @@ public:
   bool SupportsComponentInstallation() const override;
 
 private:
+  std::string GetArchiveFileName();
   // get archive component filename
-  std::string GetArchiveComponentFileName(const std::string& component,
+  std::string GetArchiveComponentFileName(std::string const& component,
                                           bool isGroupName);
 
   class Deduplicator;
@@ -82,17 +97,20 @@ protected:
   int PackageComponentsAllInOne();
 
 private:
-  const char* GetNameOfClass() override { return "cmCPackArchiveGenerator"; }
+  char const* GetNameOfClass() override { return "cmCPackArchiveGenerator"; }
 
-  const char* GetOutputExtension() override
+  char const* GetOutputExtension() override
   {
     return this->OutputExtension.c_str();
   }
 
   int GetThreadCount() const;
+  int GetCompressionLevel() const;
 
 private:
   cmArchiveWrite::Compress Compress;
   std::string ArchiveFormat;
   std::string OutputExtension;
+  int UID = 0;
+  int GID = 0;
 };

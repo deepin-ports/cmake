@@ -1,5 +1,5 @@
 # Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-# file Copyright.txt or https://cmake.org/licensing for details.
+# file LICENSE.rst or https://cmake.org/licensing for details.
 
 
 # determine the compiler to use for RC programs
@@ -17,7 +17,7 @@ if(NOT CMAKE_RC_COMPILER)
     endif()
     if(EXISTS ${CMAKE_RC_COMPILER_INIT})
     else()
-      message(FATAL_ERROR "Could not find compiler set in environment variable RC:\n$ENV{RC}.")
+      message(FATAL_ERROR "Could not find the compiler specified in the environment variable RC:\n$ENV{RC}.")
     endif()
   endif()
 

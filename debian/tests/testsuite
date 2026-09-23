@@ -1,14 +1,21 @@
 #!/bin/sh
 
-set -ev
-
-SRCDIR="$(pwd)"
-
-cd "$AUTOPKGTEST_TMP"
-
-cmake -DCMake_TEST_EXTERNAL_CMAKE=/usr/bin "$SRCDIR"
-make VERBOSE=1
+set -eu
+: Prepare environment
 unset http_proxy
 unset https_proxy
 unset no_proxy
-CTEST_OUTPUT_ON_FAILURE=1 ctest -E '(CTestTestUpload|BootstrapTest)'
+JOBS=$(echo ${DEB_BUILD_OPTIONS:-} | gawk 'BEGIN{f=0}match($0, /parallel=([0-9]+)/, m){f=1;print m[1]}END{if(f==0) print 1}')
+EXCLUDED_TESTS=$(debian/rules excluded-tests)
+if [ "$(dpkg-architecture -qDEB_HOST_ARCH)" = i386 ]
+then
+	NO_64BIT_TIME=ON
+else
+	NO_64BIT_TIME=OFF
+fi
+set -x
+: Build and run test suite
+cmake -DCMake_TEST_NO_64BIT_TIME:BOOL=${NO_64BIT_TIME} -DCMake_TEST_EXTERNAL_CMAKE=/usr/bin -S . -B "$AUTOPKGTEST_TMP" --fresh
+cmake --build "$AUTOPKGTEST_TMP" --verbose --parallel=$JOBS
+ctest --output-on-failure --parallel=$JOBS -E "(${EXCLUDED_TESTS})" --test-dir "$AUTOPKGTEST_TMP"
+

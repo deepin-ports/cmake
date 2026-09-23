@@ -12,9 +12,6 @@ set(_ARMClang_CMAKE_LOADED TRUE)
 # Save the CMP0123 setting in a variable used both below and by try_compile.
 cmake_policy(GET CMP0123 CMAKE_ARMClang_CMP0123)
 
-cmake_policy(PUSH)
-cmake_policy(SET CMP0057 NEW) # if IN_LIST
-
 set(CMAKE_EXECUTABLE_SUFFIX ".elf")
 
 if (CMAKE_LINKER MATCHES "armlink")
@@ -124,7 +121,12 @@ macro(__compiler_armclang lang)
     list(TRANSFORM CMAKE_LINKER_CPU_LIST TOLOWER)
     __armclang_check_processor("${CMAKE_SYSTEM_PROCESSOR}" "${CMAKE_LINKER_CPU_LIST}" _CMAKE_CHECK_LINK_CPU_RESULT)
     if(_CMAKE_CHECK_LINK_CPU_RESULT)
-      string(APPEND CMAKE_${lang}_LINK_FLAGS " --cpu=${CMAKE_SYSTEM_PROCESSOR}")
+      string(APPEND CMAKE_EXECUTABLE_CREATE_${lang}_FLAGS " --cpu=${CMAKE_SYSTEM_PROCESSOR}")
+      cmake_policy(GET CMP0210 _CMP0210)
+      if (NOT _CMP0210 STREQUAL "NEW")
+        string(APPEND CMAKE_${lang}_LINK_FLAGS " --cpu=${CMAKE_SYSTEM_PROCESSOR}")
+      endif()
+      unset(_CMP0210)
     endif()
 
   endif()
@@ -135,12 +137,10 @@ macro(__compiler_armclang lang)
   else()
     set(__CMAKE_ARMClang_USING_armlink_WRAPPER "-Xlinker")
   endif()
-  set(CMAKE_${lang}_LINK_EXECUTABLE "<CMAKE_LINKER> <CMAKE_${lang}_LINK_FLAGS> <LINK_FLAGS> <LINK_LIBRARIES> <OBJECTS> -o <TARGET> ${__CMAKE_ARMClang_USING_armlink_WRAPPER} --list=<TARGET_BASE>.map")
+  set(CMAKE_${lang}_LINK_EXECUTABLE "<CMAKE_LINKER> <LINK_FLAGS> <LINK_LIBRARIES> <OBJECTS> -o <TARGET> ${__CMAKE_ARMClang_USING_armlink_WRAPPER}")
   set(CMAKE_${lang}_CREATE_STATIC_LIBRARY  "<CMAKE_AR> --create -cr <TARGET> <LINK_FLAGS> <OBJECTS>")
   set(CMAKE_${lang}_ARCHIVE_CREATE         "<CMAKE_AR> --create -cr <TARGET> <LINK_FLAGS> <OBJECTS>")
   set(CMAKE_${lang}_RESPONSE_FILE_LINK_FLAG "${__CMAKE_ARMClang_USING_armlink_WRAPPER} --via=")
   set(CMAKE_${lang}_OUTPUT_EXTENSION ".o")
   set(CMAKE_${lang}_OUTPUT_EXTENSION_REPLACE 1)
 endmacro()
-
-cmake_policy(POP)

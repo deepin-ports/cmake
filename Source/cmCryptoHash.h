@@ -1,10 +1,11 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #pragma once
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
 #include <cstddef>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -52,27 +53,39 @@ public:
   static bool IntFromHexDigit(char input, char& output);
 
   /// @brief Converts a byte hash to a sequence of hex character pairs
-  static std::string ByteHashToString(const std::vector<unsigned char>& hash);
+  static std::string ByteHashToString(std::vector<unsigned char> const& hash);
 
   /// @brief Calculates a binary hash from string input data
   /// @return Binary hash vector
   std::vector<unsigned char> ByteHashString(cm::string_view input);
 
+  /// @brief Calculates a binary hash from stream content
+  /// @see ByteHashString()
+  /// @return Non empty binary hash vector if the stream was read successfully.
+  ///         An empty vector otherwise.
+  std::vector<unsigned char> ByteHashStream(std::istream& sin);
+
   /// @brief Calculates a binary hash from file content
   /// @see ByteHashString()
   /// @return Non empty binary hash vector if the file was read successfully.
   ///         An empty vector otherwise.
-  std::vector<unsigned char> ByteHashFile(const std::string& file);
+  std::vector<unsigned char> ByteHashFile(std::string const& file);
 
   /// @brief Calculates a hash string from string input data
   /// @return Sequence of hex characters pairs for each byte of the binary hash
   std::string HashString(cm::string_view input);
 
+  /// @brief Calculates a hash string from stream content
+  /// @see HashString()
+  /// @return Non empty hash string if the stream was read successfully.
+  ///         An empty string otherwise.
+  std::string HashStream(std::istream& sin);
+
   /// @brief Calculates a hash string from file content
   /// @see HashString()
   /// @return Non empty hash string if the file was read successfully.
   ///         An empty string otherwise.
-  std::string HashFile(const std::string& file);
+  std::string HashFile(std::string const& file);
 
   /// @brief Returns the name of the hash type.
   /// @return The name of the hash type associated with this hash generator.

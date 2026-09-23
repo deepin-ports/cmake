@@ -1,5 +1,5 @@
 # Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-# file Copyright.txt or https://cmake.org/licensing for details.
+# file LICENSE.rst or https://cmake.org/licensing for details.
 
 #[=======================================================================[.rst:
 FindPython3
@@ -7,8 +7,12 @@ FindPython3
 
 .. versionadded:: 3.12
 
-Find Python 3 interpreter, compiler and development environment (include
-directories and libraries).
+Finds Python 3 interpreter, compiler and development environment (include
+directories and libraries):
+
+.. code-block:: cmake
+
+  find_package(Python3 [<version>] [COMPONENTS <components>...] [...])
 
 .. versionadded:: 3.19
   When a version is requested, it can be specified as a simple value or as a
@@ -38,19 +42,41 @@ The following components are supported:
       `Stable Application Binary Interface <https://docs.python.org/3/c-api/stable.html>`_.
       This component is available only for version ``3.2`` and upper.
 
-* ``NumPy``: search for NumPy include directories.
-
 .. versionadded:: 3.14
-  Added the ``NumPy`` component.
+
+  * ``NumPy``: search for NumPy include directories. Specifying this component
+    imply also the components ``Interpreter`` and ``Development.Module``.
+
+  .. versionchanged:: 4.2
+    The component ``Development.Module`` is no longer implied when the policy
+    :policy:`CMP0201` is set to ``NEW``.
 
 If no ``COMPONENTS`` are specified, ``Interpreter`` is assumed.
 
 If component ``Development`` is specified, it implies sub-components
 ``Development.Module`` and ``Development.Embed``.
 
+.. versionchanged:: 4.1
+
+  In a cross-compiling mode (i.e. the :variable:`CMAKE_CROSSCOMPILING` variable
+  is defined to true), the following constraints, when the policy
+  :policy:`CMP0190` is set to ``NEW``, now apply to the requested components:
+
+  * ``Interpreter`` or ``Compiler`` alone: the host artifacts will be searched.
+  * ``Interpreter`` or ``Compiler`` with ``Development`` or any sub-component:
+    The target artifacts will be searched. In this case, the
+    :variable:`CMAKE_CROSSCOMPILING_EMULATOR` variable must be defined and will
+    be used to execute the interpreter or the compiler.
+
+  When both host and target artifacts are needed, two different calls to the
+  :command:`find_package` command should be done. The
+  ``Python_ARTIFACTS_PREFIX`` variable can be helpful in this situation.
+
 To ensure consistent versions between components ``Interpreter``, ``Compiler``,
 ``Development`` (or one of its sub-components) and ``NumPy``, specify all
-components at the same time::
+components at the same time:
+
+.. code-block:: cmake
 
   find_package (Python3 COMPONENTS Interpreter Development)
 
@@ -71,7 +97,7 @@ for you.
 Imported Targets
 ^^^^^^^^^^^^^^^^
 
-This module defines the following :ref:`Imported Targets <Imported Targets>`:
+This module provides the following :ref:`Imported Targets`:
 
 .. versionchanged:: 3.14
   :ref:`Imported Targets <Imported Targets>` are only created when
@@ -118,17 +144,22 @@ This module defines the following :ref:`Imported Targets <Imported Targets>`:
   .. versionadded:: 3.14
 
   NumPy library for Python 3. Target defined if component ``NumPy`` is found.
+  Moreover, this target has the ``Python3::Module`` target as dependency.
+
+  .. versionchanged:: 4.2
+    This target does not have anymore the ``Python3::Module`` target as
+    dependency when the policy :policy:`CMP0201` is set to ``NEW``.
 
 Result Variables
 ^^^^^^^^^^^^^^^^
 
-This module will set the following variables in your project
+This module defines the following variables
 (see :ref:`Standard Variable Names <CMake Developer Standard Variable Names>`):
 
 ``Python3_FOUND``
-  System has the Python 3 requested components.
+  Boolean indicating whether system has the Python 3 requested components.
 ``Python3_Interpreter_FOUND``
-  System has the Python 3 interpreter.
+  Boolean indicating whether system has the Python 3 interpreter.
 ``Python3_EXECUTABLE``
   Path to the Python 3 interpreter.
 ``Python3_EXECUTABLE_DEBUG``
@@ -190,7 +221,7 @@ This module will set the following variables in your project
   string.
 
 ``Python3_Compiler_FOUND``
-  System has the Python 3 compiler.
+  Boolean indicating whether system has the Python 3 compiler.
 ``Python3_COMPILER``
   Path to the Python 3 compiler. Only offered by IronPython.
 ``Python3_COMPILER_ID``
@@ -204,23 +235,25 @@ This module will set the following variables in your project
 
 ``Python3_Development_FOUND``
 
-  System has the Python 3 development artifacts.
+  Boolean indicating whether system has the Python 3 development artifacts.
 
 ``Python3_Development.Module_FOUND``
   .. versionadded:: 3.18
 
-  System has the Python 3 development artifacts for Python module.
+  Boolean indicating whether system has the Python 3 development artifacts
+  for Python module.
 
 ``Python3_Development.SABIModule_FOUND``
   .. versionadded:: 3.26
 
-  System has the Python 3 development artifacts for Python module using the
-  Stable Application Binary Interface.
+  Boolean indicating whether system has the Python 3 development artifacts
+  for Python module using the Stable Application Binary Interface.
 
 ``Python3_Development.Embed_FOUND``
   .. versionadded:: 3.18
 
-  System has the Python 3 development artifacts for Python embedding.
+  Boolean indicating whether system has the Python 3 development artifacts
+  for Python embedding.
 
 ``Python3_INCLUDE_DIRS``
 
@@ -278,7 +311,7 @@ This module will set the following variables in your project
 ``Python3_NumPy_FOUND``
   .. versionadded:: 3.14
 
-  System has the NumPy.
+  Boolean indicating whether system has the NumPy.
 
 ``Python3_NumPy_INCLUDE_DIRS``
   .. versionadded:: 3.14
@@ -338,14 +371,18 @@ Hints
   ``pydebug`` and ``gil_disabled``, ``debug`` and ``free threaded`` versions
   will be searched **after** ``non-debug`` and ``non-gil-disabled`` ones.
 
-  For example, if we have::
+  For example, if we have:
+
+  .. code-block:: cmake
 
     set (Python3_FIND_ABI "ON" "ANY" "ANY" "ON")
 
   The following flags combinations will be appended, in that order, to the
   artifact names: ``tdmu``, ``tdm``, ``tdu``, and ``td``.
 
-  And to search any possible ABIs::
+  And to search any possible ABIs:
+
+  .. code-block:: cmake
 
     set (Python3_FIND_ABI "ANY" "ANY" "ANY" "ANY")
 
@@ -431,9 +468,9 @@ Hints
 
   .. note::
 
-    If the component ``Development`` is requested, it is **strongly**
-    recommended to also include the component ``Interpreter`` to get expected
-    result.
+    If the component ``Development`` is requested (or one of its
+    sub-components) and is not found or the wrong artifacts are returned,
+    including also the component ``Interpreter`` may be helpful.
 
 ``Python3_FIND_IMPLEMENTATIONS``
   .. versionadded:: 3.18
@@ -557,6 +594,31 @@ can be controlled with the following variable:
   * If set to ``FALSE`` or undefined: Enable multiple version/component
     requirements.
 
+``Python3_ARTIFACTS_PREFIX``
+  .. versionadded:: 4.0
+
+  Define a custom prefix which will be used for the definition of all the
+  result variables, targets, and commands. By using this variable, this module
+  supports multiple calls in the same directory with different
+  version/component requirements.
+  For example, in case of cross-compilation, development components are needed
+  but the native python interpreter can also be required:
+
+  .. code-block:: cmake
+
+    find_package(Python3 COMPONENTS Development)
+
+    set(Python3_ARTIFACTS_PREFIX "_HOST")
+    find_package(Python3 COMPONENTS Interpreter)
+
+    # Here Python3_HOST_EXECUTABLE and Python3_HOST::Interpreter artifacts are defined
+
+  .. note::
+
+    For consistency with standard behavior of modules, the various standard
+    ``_FOUND`` variables (i.e. without the custom prefix) are also defined by
+    each call to the :command:`find_package` command.
+
 Commands
 ^^^^^^^^
 
@@ -565,7 +627,9 @@ This module defines the command ``Python3_add_library`` (when
 :command:`add_library` and adds a dependency to target ``Python3::Python`` or,
 when library type is ``MODULE``, to target ``Python3::Module`` or
 ``Python3::SABIModule`` (when ``USE_SABI`` option is specified) and takes care
-of Python module naming rules::
+of Python module naming rules:
+
+.. code-block:: cmake
 
   Python3_add_library (<name> [STATIC | SHARED | MODULE [USE_SABI <version>] [WITH_SOABI]]
                        <source1> [<source2> ...])
@@ -595,16 +659,23 @@ If the library type is not specified, ``MODULE`` is assumed.
 #]=======================================================================]
 
 
-set (_PYTHON_PREFIX Python3)
+set (_PYTHON_BASE Python3)
+if(${_PYTHON_BASE}_ARTIFACTS_PREFIX)
+  set(_PYTHON_PREFIX "${_PYTHON_BASE}${${_PYTHON_BASE}_ARTIFACTS_PREFIX}")
+else()
+  set(_PYTHON_PREFIX "${_PYTHON_BASE}")
+endif()
 
-set (_Python3_REQUIRED_VERSION_MAJOR 3)
+set (_${_PYTHON_PREFIX}_REQUIRED_VERSION_MAJOR 3)
 
 include (${CMAKE_CURRENT_LIST_DIR}/FindPython/Support.cmake)
 
-if (COMMAND __Python3_add_library)
-  macro (Python3_add_library)
-    __Python3_add_library (Python3 ${ARGV})
-  endmacro()
+if (COMMAND __${_PYTHON_PREFIX}_add_library AND NOT COMMAND ${_PYTHON_PREFIX}_add_library)
+  cmake_language(EVAL CODE
+    "macro (${_PYTHON_PREFIX}_add_library)
+      __${_PYTHON_PREFIX}_add_library (${_PYTHON_PREFIX} \${ARGV})
+    endmacro()")
 endif()
 
+unset (_PYTHON_BASE)
 unset (_PYTHON_PREFIX)

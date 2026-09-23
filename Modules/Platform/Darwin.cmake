@@ -26,18 +26,6 @@ endif()
 string(REGEX REPLACE "^([0-9]+)\\.([0-9]+).*$" "\\1" DARWIN_MAJOR_VERSION "${CMAKE_SYSTEM_VERSION}")
 string(REGEX REPLACE "^([0-9]+)\\.([0-9]+).*$" "\\2" DARWIN_MINOR_VERSION "${CMAKE_SYSTEM_VERSION}")
 
-# Do not use the "-Wl,-search_paths_first" flag with the OSX 10.2 compiler.
-# Done this way because it is too early to do a TRY_COMPILE.
-if(NOT DEFINED HAVE_FLAG_SEARCH_PATHS_FIRST)
-  set(HAVE_FLAG_SEARCH_PATHS_FIRST 0)
-  if("${DARWIN_MAJOR_VERSION}" GREATER 6)
-    set(HAVE_FLAG_SEARCH_PATHS_FIRST 1)
-  endif()
-endif()
-# More desirable, but does not work:
-  #include(CheckCXXCompilerFlag)
-  #CHECK_CXX_COMPILER_FLAG("-Wl,-search_paths_first" HAVE_FLAG_SEARCH_PATHS_FIRST)
-
 set(CMAKE_SHARED_LIBRARY_PREFIX "lib")
 set(CMAKE_SHARED_LIBRARY_SUFFIX ".dylib")
 set(CMAKE_EXTRA_SHARED_LIBRARY_SUFFIXES ".tbd" ".so")
@@ -47,23 +35,25 @@ set(CMAKE_APPLE_IMPORT_FILE_PREFIX "lib")
 set(CMAKE_APPLE_IMPORT_FILE_SUFFIX ".tbd")
 set(CMAKE_MODULE_EXISTS 1)
 set(CMAKE_DL_LIBS "")
-if(NOT "${_CURRENT_OSX_VERSION}" VERSION_LESS "10.5")
+if(NOT (DEFINED _CMAKE_HOST_OSX_VERSION AND _CMAKE_HOST_OSX_VERSION VERSION_LESS "10.5"))
   set(CMAKE_SHARED_LIBRARY_RUNTIME_C_FLAG "-Wl,-rpath,")
 endif()
 
+cmake_policy(GET CMP0210 _CMP0210)
 foreach(lang C CXX OBJC OBJCXX)
   set(CMAKE_${lang}_OSX_COMPATIBILITY_VERSION_FLAG "-compatibility_version ")
   set(CMAKE_${lang}_OSX_CURRENT_VERSION_FLAG "-current_version ")
-  set(CMAKE_${lang}_LINK_FLAGS "-Wl,-headerpad_max_install_names")
 
-  if(HAVE_FLAG_SEARCH_PATHS_FIRST)
-    set(CMAKE_${lang}_LINK_FLAGS "-Wl,-search_paths_first ${CMAKE_${lang}_LINK_FLAGS}")
+  set(CMAKE_EXECUTABLE_CREATE_${lang}_FLAGS "-Wl,-search_paths_first -Wl,-headerpad_max_install_names")
+  if (NOT _CMP0210 STREQUAL "NEW")
+    set(CMAKE_${lang}_LINK_FLAGS "${CMAKE_EXECUTABLE_CREATE_${lang}_FLAGS}")
   endif()
 
   set(CMAKE_SHARED_LIBRARY_CREATE_${lang}_FLAGS "-dynamiclib -Wl,-headerpad_max_install_names")
   set(CMAKE_SHARED_MODULE_CREATE_${lang}_FLAGS "-bundle -Wl,-headerpad_max_install_names")
   set(CMAKE_SHARED_MODULE_LOADER_${lang}_FLAG "-Wl,-bundle_loader,")
 endforeach()
+unset(_CMP0210)
 
 set(CMAKE_PLATFORM_HAS_INSTALLNAME 1)
 set(CMAKE_FIND_LIBRARY_SUFFIXES ".tbd" ".dylib" ".so" ".a")
@@ -80,7 +70,7 @@ endif()
 # Enable shared library versioning.
 set(CMAKE_SHARED_LIBRARY_SONAME_C_FLAG "-install_name")
 
-if("${_CURRENT_OSX_VERSION}" VERSION_LESS "10.5")
+if(DEFINED _CMAKE_HOST_OSX_VERSION AND _CMAKE_HOST_OSX_VERSION VERSION_LESS "10.5")
   # Need to list dependent shared libraries on link line.  When building
   # with -isysroot (for universal binaries), the linker always looks for
   # dependent libraries under the sysroot.  Listing them on the link
@@ -95,13 +85,13 @@ foreach(lang C CXX Fortran OBJC OBJCXX)
   endif()
 
   set(CMAKE_${lang}_CREATE_SHARED_LIBRARY
-    "<CMAKE_${lang}_COMPILER> <LANGUAGE_COMPILE_FLAGS> <CMAKE_SHARED_LIBRARY_CREATE_${lang}_FLAGS> <LINK_FLAGS> -o <TARGET> <SONAME_FLAG> <TARGET_INSTALLNAME_DIR><TARGET_SONAME> <OBJECTS> <LINK_LIBRARIES>")
+    "<CMAKE_${lang}_COMPILER> <LANGUAGE_COMPILE_FLAGS> <LINK_FLAGS> -o <TARGET> <SONAME_FLAG> <TARGET_INSTALLNAME_DIR><TARGET_SONAME> <OBJECTS> <LINK_LIBRARIES>")
 
   set(CMAKE_${lang}_CREATE_SHARED_MODULE
-      "<CMAKE_${lang}_COMPILER> <LANGUAGE_COMPILE_FLAGS> <CMAKE_SHARED_MODULE_CREATE_${lang}_FLAGS> <LINK_FLAGS> -o <TARGET> <OBJECTS> <LINK_LIBRARIES>")
+      "<CMAKE_${lang}_COMPILER> <LANGUAGE_COMPILE_FLAGS> <LINK_FLAGS> -o <TARGET> <OBJECTS> <LINK_LIBRARIES>")
 
   set(CMAKE_${lang}_CREATE_MACOSX_FRAMEWORK
-      "<CMAKE_${lang}_COMPILER> <LANGUAGE_COMPILE_FLAGS> <CMAKE_SHARED_LIBRARY_CREATE_${lang}_FLAGS> <LINK_FLAGS> -o <TARGET> <SONAME_FLAG> <TARGET_INSTALLNAME_DIR><TARGET_SONAME> <OBJECTS> <LINK_LIBRARIES>")
+      "<CMAKE_${lang}_COMPILER> <LANGUAGE_COMPILE_FLAGS> <LINK_FLAGS> -o <TARGET> <SONAME_FLAG> <TARGET_INSTALLNAME_DIR><TARGET_SONAME> <OBJECTS> <LINK_LIBRARIES>")
 
   # Set default framework search path flag for languages known to use a
   # preprocessor that may find headers in frameworks.
@@ -157,7 +147,8 @@ if(_CMAKE_OSX_SYSROOT_PATH)
   list(APPEND CMAKE_PLATFORM_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES
     /System/Library/Frameworks)
 endif()
-if("${_CURRENT_OSX_VERSION}" VERSION_LESS "10.5")
+
+if(DEFINED _CMAKE_HOST_OSX_VERSION AND _CMAKE_HOST_OSX_VERSION VERSION_LESS "10.5")
   # Older OS X tools had more implicit paths.
   list(APPEND CMAKE_PLATFORM_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES
     ${_CMAKE_OSX_SYSROOT_PATH}/Network/Library/Frameworks)
@@ -182,9 +173,9 @@ if(_CMAKE_OSX_SYSROOT_PATH)
     # Xcode 5 OSX
     ${_CMAKE_OSX_SYSROOT_PATH}/../../../../../Library/Frameworks
     )
-    get_filename_component(_abolute_path "${_path}" ABSOLUTE)
-    if(EXISTS "${_abolute_path}")
-      list(APPEND CMAKE_SYSTEM_FRAMEWORK_PATH "${_abolute_path}")
+    get_filename_component(_absolute_path "${_path}" ABSOLUTE)
+    if(EXISTS "${_absolute_path}")
+      list(APPEND CMAKE_SYSTEM_FRAMEWORK_PATH "${_absolute_path}")
       break()
     endif()
   endforeach()
@@ -205,7 +196,7 @@ list(APPEND CMAKE_SYSTEM_FRAMEWORK_PATH
   /Network/Library/Frameworks
   /System/Library/Frameworks)
 
-# Warn about known system mis-configuration case.
+# Warn about known system misconfiguration case.
 if(CMAKE_OSX_SYSROOT)
   get_property(_IN_TC GLOBAL PROPERTY IN_TRY_COMPILE)
   if(NOT _IN_TC AND
@@ -248,10 +239,26 @@ unset(_apps_paths)
 
 include(Platform/UnixPaths)
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
-  list(PREPEND CMAKE_SYSTEM_PREFIX_PATH
-    /opt/homebrew # Brew on Apple Silicon
-    )
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  execute_process(
+    COMMAND brew --prefix
+    OUTPUT_VARIABLE _cmake_homebrew_prefix
+    RESULT_VARIABLE _brew_result
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  if (_brew_result EQUAL 0 AND IS_DIRECTORY "${_cmake_homebrew_prefix}")
+    list(PREPEND CMAKE_SYSTEM_PREFIX_PATH "${_cmake_homebrew_prefix}")
+  elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
+    list(PREPEND CMAKE_SYSTEM_PREFIX_PATH
+      /opt/homebrew # Brew on Apple Silicon
+      )
+  else()
+    list(PREPEND CMAKE_SYSTEM_PREFIX_PATH
+      /usr/local # Brew on Intel
+      )
+  endif()
+  unset(_cmake_homebrew_prefix)
+  unset(_brew_result)
 endif()
 
 if(_CMAKE_OSX_SYSROOT_PATH)

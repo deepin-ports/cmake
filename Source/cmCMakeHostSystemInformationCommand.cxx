@@ -1,10 +1,9 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmCMakeHostSystemInformationCommand.h"
 
 #include <algorithm>
 #include <cassert>
-#include <cctype>
 #include <cstddef>
 #include <initializer_list>
 #include <map>
@@ -13,10 +12,16 @@
 
 #include <cm/optional>
 #include <cm/string_view>
+#include <cm/type_traits>
 #include <cmext/string_view>
+
+#if !defined(_WIN32)
+#  include <langinfo.h>
+#endif
 
 #include "cmsys/FStream.hxx"
 #include "cmsys/Glob.hxx"
+#include "cmsys/String.h"
 #include "cmsys/SystemInformation.hxx"
 
 #include "cmArgumentParser.h"
@@ -41,12 +46,14 @@ namespace {
 std::string const DELIM[2] = { {}, ";" };
 
 // BEGIN Private functions
-std::string ValueToString(std::size_t const value)
+template <typename T>
+cm::enable_if_t<std::is_arithmetic<T>::value, std::string> ValueToString(
+  T const& value)
 {
   return std::to_string(value);
 }
 
-std::string ValueToString(const char* const value)
+std::string ValueToString(char const* const value)
 {
   return value ? value : std::string{};
 }
@@ -70,6 +77,22 @@ cm::optional<std::string> GetValue(cmsys::SystemInformation& info,
   }
   if (key == "FQDN"_s) {
     return ValueToString(info.GetFullyQualifiedDomainName());
+  }
+  if (key == "LOCALE_CHARSET"_s) {
+#if defined(_WIN32)
+    // On Windows we always use UTF-8.
+    return ValueToString("UTF-8");
+#else
+    // On non-Windows platforms we use the locale's encoding.
+    if (char const* charset = nl_langinfo(CODESET)) {
+      if (cmsysString_strcasecmp(charset, "utf-8") == 0 ||
+          cmsysString_strcasecmp(charset, "utf8") == 0) {
+        charset = "UTF-8";
+      }
+      return ValueToString(charset);
+    }
+    return ValueToString("");
+#endif
   }
   if (key == "TOTAL_VIRTUAL_MEMORY"_s) {
     return ValueToString(info.GetTotalVirtualMemory());
@@ -130,6 +153,14 @@ cm::optional<std::string> GetValue(cmsys::SystemInformation& info,
     return ValueToString(info.DoesCPUSupportFeature(
       cmsys::SystemInformation::CPU_FEATURE_SERIALNUMBER));
   }
+  if (key == "HAS_APIC"_s) {
+    return ValueToString(
+      info.DoesCPUSupportFeature(cmsys::SystemInformation::CPU_FEATURE_APIC));
+  }
+  if (key == "HAS_L1_CACHE"_s) {
+    return ValueToString(info.DoesCPUSupportFeature(
+      cmsys::SystemInformation::CPU_FEATURE_L1CACHE));
+  }
   if (key == "PROCESSOR_NAME"_s) {
     return ValueToString(info.GetExtendedProcessorName());
   }
@@ -150,6 +181,38 @@ cm::optional<std::string> GetValue(cmsys::SystemInformation& info,
   }
   if (key == "OS_PLATFORM"_s) {
     return ValueToString(info.GetOSPlatform());
+  }
+  if (key == "FAMILY_ID"_s) {
+    return ValueToString(info.GetFamilyID());
+  }
+  if (key == "MODEL_ID"_s) {
+    return ValueToString(info.GetModelID());
+  }
+  if (key == "MODEL_NAME"_s) {
+    return ValueToString(info.GetModelName());
+  }
+  if (key == "PROCESSOR_APIC_ID"_s) {
+    int apicId = info.GetProcessorAPICID();
+    if (apicId) {
+      return ValueToString(apicId);
+    }
+    return "";
+  }
+  if (key == "PROCESSOR_CACHE_SIZE"_s) {
+    int cacheSize = info.GetProcessorCacheSize();
+    if (cacheSize > 0) {
+      return ValueToString(cacheSize);
+    }
+    return "";
+  }
+  if (key == "PROCESSOR_CLOCK_FREQUENCY"_s) {
+    return ValueToString(info.GetProcessorClockFrequency());
+  }
+  if (key == "VENDOR_ID"_s) {
+    return ValueToString(info.GetVendorID());
+  }
+  if (key == "VENDOR_STRING"_s) {
+    return ValueToString(info.GetVendorString());
   }
   return {};
 }
@@ -175,10 +238,10 @@ cm::optional<std::pair<std::string, std::string>> ParseOSReleaseLine(
   for (auto ch : line) {
     switch (state) {
       case PARSE_KEY_1ST:
-        if (std::isalpha(ch) || ch == '_') {
+        if (cmsysString_isalpha(ch) || ch == '_') {
           key += ch;
           state = PARSE_KEY;
-        } else if (!cmIsSpace(ch)) {
+        } else if (!cmsysString_isspace(ch)) {
           state = IGNORE_REST;
         }
         break;
@@ -186,7 +249,7 @@ cm::optional<std::pair<std::string, std::string>> ParseOSReleaseLine(
       case PARSE_KEY:
         if (ch == '=') {
           state = FOUND_EQ;
-        } else if (std::isalnum(ch) || ch == '_') {
+        } else if (cmsysString_isalnum(ch) || ch == '_') {
           key += ch;
         } else {
           state = IGNORE_REST;
@@ -238,7 +301,7 @@ cm::optional<std::pair<std::string, std::string>> ParseOSReleaseLine(
         break;
 
       case PARSE_VALUE:
-        if (ch == '#' || cmIsSpace(ch)) {
+        if (ch == '#' || cmsysString_isspace(ch)) {
           state = IGNORE_REST;
         } else {
           value += ch;
@@ -266,13 +329,13 @@ std::map<std::string, std::string> GetOSReleaseVariables(
   cmExecutionStatus& status)
 {
   auto& makefile = status.GetMakefile();
-  const auto& sysroot = makefile.GetSafeDefinition("CMAKE_SYSROOT");
+  auto const& sysroot = makefile.GetSafeDefinition("CMAKE_SYSROOT");
 
   std::map<std::string, std::string> data;
   // Based on
   // https://www.freedesktop.org/software/systemd/man/latest/os-release.html
   for (auto name : { "/etc/os-release"_s, "/usr/lib/os-release"_s }) {
-    const auto& filename = cmStrCat(sysroot, name);
+    auto const& filename = cmStrCat(sysroot, name);
     if (cmSystemTools::FileExists(filename)) {
       cmsys::ifstream fin(filename.c_str());
       for (std::string line; !std::getline(fin, line).fail();) {
@@ -303,7 +366,7 @@ std::map<std::string, std::string> GetOSReleaseVariables(
     scripts = gl.GetFiles();
   }
 
-  // 2. User provided (append to the CMake prvided)
+  // 2. User provided (append to the CMake provided)
   cmList::append(
     scripts, makefile.GetDefinition("CMAKE_GET_OS_RELEASE_FALLBACK_SCRIPTS"));
 
@@ -312,8 +375,8 @@ std::map<std::string, std::string> GetOSReleaseVariables(
     auto const& filename = cmSystemTools::GetFilenameName(filepath);
     // NOTE Minimum filename length expected:
     //   NNN-<at-least-one-char-name>.cmake  --> 11
-    return (filename.size() < 11) || !std::isdigit(filename[0]) ||
-      !std::isdigit(filename[1]) || !std::isdigit(filename[2]) ||
+    return (filename.size() < 11) || !cmsysString_isdigit(filename[0]) ||
+      !cmsysString_isdigit(filename[1]) || !cmsysString_isdigit(filename[2]) ||
       filename[3] != '-';
   };
   scripts.erase(std::remove_if(scripts.begin(), scripts.end(), checkName),
@@ -381,21 +444,21 @@ cm::optional<std::string> GetDistribValue(cmExecutionStatus& status,
                                           std::string const& key,
                                           std::string const& variable)
 {
-  const auto prefix = "DISTRIB_"_s;
+  auto const prefix = "DISTRIB_"_s;
   if (!cmHasPrefix(key, prefix)) {
     return {};
   }
 
-  static const std::map<std::string, std::string> s_os_release =
+  static std::map<std::string, std::string> const s_os_release =
     GetOSReleaseVariables(status);
 
   auto& makefile = status.GetMakefile();
 
-  const std::string subkey =
+  std::string const subkey =
     key.substr(prefix.size(), key.size() - prefix.size());
   if (subkey == "INFO"_s) {
     std::string vars;
-    for (const auto& kv : s_os_release) {
+    for (auto const& kv : s_os_release) {
       auto cmake_var_name = cmStrCat(variable, '_', kv.first);
       vars += DELIM[!vars.empty()] + cmake_var_name;
       makefile.AddDefinition(cmake_var_name, kv.second);
@@ -404,7 +467,7 @@ cm::optional<std::string> GetDistribValue(cmExecutionStatus& status,
   }
 
   // Query individual variable
-  const auto it = s_os_release.find(subkey);
+  auto const it = s_os_release.find(subkey);
   if (it != s_os_release.cend()) {
     return it->second;
   }
@@ -498,7 +561,7 @@ cm::optional<std::string> GetWindowsValue(cmExecutionStatus& status,
                                           std::string const& key)
 {
   auto* const gg = status.GetMakefile().GetGlobalGenerator();
-  for (auto vs : { 15, 16, 17 }) {
+  for (auto vs : { 15, 16, 17, 18 }) {
     if (key == cmStrCat("VS_"_s, vs, "_DIR"_s)) {
       std::string value;
       // If generating for the VS nn IDE, use the same instance.
@@ -604,14 +667,14 @@ bool QueryWindowsRegistry(Range args, cmExecutionStatus& status,
        (arguments.ValueNames || arguments.SubKeys)) ||
       (arguments.ValueName.empty() && arguments.ValueNames &&
        arguments.SubKeys)) {
-    status.SetError("given mutually exclusive sub-options \"VALUE\", "
-                    "\"VALUE_NAMES\" or \"SUBKEYS\".");
+    status.SetError("given mutually exclusive sub-options VALUE, "
+                    "VALUE_NAMES or SUBKEYS.");
     return false;
   }
 
   if (!arguments.View.empty() && !cmWindowsRegistry::ToView(arguments.View)) {
     status.SetError(
-      cmStrCat("given invalid value for \"VIEW\": ", arguments.View, '.'));
+      cmStrCat("given invalid value for VIEW: ", arguments.View, '.'));
     return false;
   }
 

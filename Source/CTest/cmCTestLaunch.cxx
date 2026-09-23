@@ -1,27 +1,32 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmCTestLaunch.h"
 
 #include <cstdio>
 #include <cstring>
+#include <functional>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <utility>
+
+#include <cm/optional>
 
 #include <cm3p/uv.h>
 
 #include "cmsys/FStream.hxx"
 #include "cmsys/RegularExpression.hxx"
 
+#include "cmCMakePath.h"
 #include "cmCTestLaunchReporter.h"
 #include "cmGlobalGenerator.h"
+#include "cmInstrumentation.h"
 #include "cmMakefile.h"
 #include "cmProcessOutput.h"
 #include "cmState.h"
 #include "cmStateSnapshot.h"
 #include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
-#include "cmUVHandlePtr.h"
 #include "cmUVProcessChain.h"
 #include "cmUVStream.h"
 #include "cmake.h"
@@ -33,7 +38,7 @@
 #  include <io.h>    // for _setmode
 #endif
 
-cmCTestLaunch::cmCTestLaunch(int argc, const char* const* argv)
+cmCTestLaunch::cmCTestLaunch(int argc, char const* const* argv, Op operation)
 {
   if (!this->ParseArguments(argc, argv)) {
     return;
@@ -45,11 +50,12 @@ cmCTestLaunch::cmCTestLaunch(int argc, const char* const* argv)
   this->ScrapeRulesLoaded = false;
   this->HaveOut = false;
   this->HaveErr = false;
+  this->Operation = operation;
 }
 
 cmCTestLaunch::~cmCTestLaunch() = default;
 
-bool cmCTestLaunch::ParseArguments(int argc, const char* const* argv)
+bool cmCTestLaunch::ParseArguments(int argc, char const* const* argv)
 {
   // Launcher options occur first and are separated from the real
   // command line by a '--' option.
@@ -59,32 +65,50 @@ bool cmCTestLaunch::ParseArguments(int argc, const char* const* argv)
     DoingOutput,
     DoingSource,
     DoingLanguage,
+    DoingTargetLabels,
     DoingTargetName,
     DoingTargetType,
+    DoingCommandType,
+    DoingRole,
     DoingBuildDir,
+    DoingCurrentBuildDir,
     DoingCount,
-    DoingFilterPrefix
+    DoingFilterPrefix,
+    DoingConfig,
+    DoingObjectDir
   };
   Doing doing = DoingNone;
   int arg0 = 0;
   for (int i = 1; !arg0 && i < argc; ++i) {
-    const char* arg = argv[i];
+    char const* arg = argv[i];
     if (strcmp(arg, "--") == 0) {
       arg0 = i + 1;
+    } else if (strcmp(arg, "--command-type") == 0) {
+      doing = DoingCommandType;
     } else if (strcmp(arg, "--output") == 0) {
       doing = DoingOutput;
     } else if (strcmp(arg, "--source") == 0) {
       doing = DoingSource;
     } else if (strcmp(arg, "--language") == 0) {
       doing = DoingLanguage;
+    } else if (strcmp(arg, "--target-labels") == 0) {
+      doing = DoingTargetLabels;
     } else if (strcmp(arg, "--target-name") == 0) {
       doing = DoingTargetName;
     } else if (strcmp(arg, "--target-type") == 0) {
       doing = DoingTargetType;
+    } else if (strcmp(arg, "--role") == 0) {
+      doing = DoingRole;
     } else if (strcmp(arg, "--build-dir") == 0) {
       doing = DoingBuildDir;
+    } else if (strcmp(arg, "--current-build-dir") == 0) {
+      doing = DoingCurrentBuildDir;
     } else if (strcmp(arg, "--filter-prefix") == 0) {
       doing = DoingFilterPrefix;
+    } else if (strcmp(arg, "--config") == 0) {
+      doing = DoingConfig;
+    } else if (strcmp(arg, "--object-dir") == 0) {
+      doing = DoingObjectDir;
     } else if (doing == DoingOutput) {
       this->Reporter.OptionOutput = arg;
       doing = DoingNone;
@@ -97,6 +121,9 @@ bool cmCTestLaunch::ParseArguments(int argc, const char* const* argv)
         this->Reporter.OptionLanguage = "C++";
       }
       doing = DoingNone;
+    } else if (doing == DoingTargetLabels) {
+      this->Reporter.OptionTargetLabels = arg;
+      doing = DoingNone;
     } else if (doing == DoingTargetName) {
       this->Reporter.OptionTargetName = arg;
       doing = DoingNone;
@@ -106,10 +133,41 @@ bool cmCTestLaunch::ParseArguments(int argc, const char* const* argv)
     } else if (doing == DoingBuildDir) {
       this->Reporter.OptionBuildDir = arg;
       doing = DoingNone;
+    } else if (doing == DoingCurrentBuildDir) {
+      this->Reporter.OptionCurrentBuildDir = arg;
+      doing = DoingNone;
     } else if (doing == DoingFilterPrefix) {
       this->Reporter.OptionFilterPrefix = arg;
       doing = DoingNone;
+    } else if (doing == DoingCommandType) {
+      this->Reporter.OptionCommandType = arg;
+      doing = DoingNone;
+    } else if (doing == DoingRole) {
+      this->Reporter.OptionRole = arg;
+      doing = DoingNone;
+    } else if (doing == DoingConfig) {
+      this->Reporter.OptionConfig = arg;
+      doing = DoingNone;
+    } else if (doing == DoingObjectDir) {
+      this->Reporter.OptionObjectDir = arg;
+      doing = DoingNone;
     }
+  }
+
+  // Older builds do not pass `--object-dir`, so construct a default if the
+  // components are available.
+  if (this->Reporter.OptionObjectDir.empty() &&
+      !this->Reporter.OptionCurrentBuildDir.empty() &&
+      !this->Reporter.OptionTargetName.empty()) {
+    this->Reporter.OptionObjectDir =
+      cmStrCat(this->Reporter.OptionCurrentBuildDir, "/CMakeFiles/",
+               this->Reporter.OptionTargetName, ".dir");
+  }
+  if (!this->Reporter.OptionObjectDir.empty() &&
+      !cmCMakePath(this->Reporter.OptionObjectDir).IsAbsolute() &&
+      !this->Reporter.OptionBuildDir.empty()) {
+    this->Reporter.OptionObjectDir = cmStrCat(
+      this->Reporter.OptionBuildDir, '/', this->Reporter.OptionObjectDir);
   }
 
   // Extract the real command line.
@@ -124,7 +182,7 @@ bool cmCTestLaunch::ParseArguments(int argc, const char* const* argv)
   return false;
 }
 
-void cmCTestLaunch::HandleRealArg(const char* arg)
+void cmCTestLaunch::HandleRealArg(char const* arg)
 {
 #ifdef _WIN32
   // Expand response file arguments.
@@ -152,6 +210,9 @@ void cmCTestLaunch::RunChild()
   cmUVProcessChainBuilder builder;
   builder.AddCommand(this->RealArgV);
 
+  // We always share the input pipe.
+  builder.SetExternalStream(cmUVProcessChainBuilder::Stream_INPUT, stdin);
+
   cmsys::ofstream fout;
   cmsys::ofstream ferr;
   if (this->Reporter.Passthru) {
@@ -177,23 +238,19 @@ void cmCTestLaunch::RunChild()
   auto chain = builder.Start();
 
   // Record child stdout and stderr if necessary.
-  cm::uv_pipe_ptr outPipe;
-  cm::uv_pipe_ptr errPipe;
   bool outFinished = true;
   bool errFinished = true;
   cmProcessOutput processOutput;
   std::unique_ptr<cmUVStreamReadHandle> outputHandle;
   std::unique_ptr<cmUVStreamReadHandle> errorHandle;
   if (!this->Reporter.Passthru) {
-    auto beginRead = [&chain, &processOutput](
-                       cm::uv_pipe_ptr& pipe, int stream, std::ostream& out,
+    auto beginRead =
+      [&processOutput](uv_stream_t* stream, std::ostream& out,
                        cmsys::ofstream& file, bool& haveData, bool& finished,
                        int id) -> std::unique_ptr<cmUVStreamReadHandle> {
-      pipe.init(chain.GetLoop(), 0);
-      uv_pipe_open(pipe, stream);
       finished = false;
       return cmUVStreamRead(
-        pipe,
+        stream,
         [&processOutput, &out, &file, id, &haveData](std::vector<char> data) {
           std::string strdata;
           processOutput.DecodeText(data.data(), data.size(), strdata, id);
@@ -211,9 +268,9 @@ void cmCTestLaunch::RunChild()
           finished = true;
         });
     };
-    outputHandle = beginRead(outPipe, chain.OutputStream(), std::cout, fout,
+    outputHandle = beginRead(chain.OutputStream(), std::cout, fout,
                              this->HaveOut, outFinished, 1);
-    errorHandle = beginRead(errPipe, chain.ErrorStream(), std::cerr, ferr,
+    errorHandle = beginRead(chain.ErrorStream(), std::cerr, ferr,
                             this->HaveErr, errFinished, 2);
   }
 
@@ -233,14 +290,36 @@ void cmCTestLaunch::RunChild()
 
 int cmCTestLaunch::Run()
 {
-  this->RunChild();
-
-  if (this->CheckResults()) {
-    return this->Reporter.ExitCode;
+  auto instrumentation = cmInstrumentation(this->Reporter.OptionBuildDir);
+  std::map<std::string, std::string> options;
+  if (this->Reporter.OptionTargetName != "TARGET_NAME") {
+    options["target"] = this->Reporter.OptionTargetName;
   }
+  options["source"] = this->Reporter.OptionSource;
+  options["language"] = this->Reporter.OptionLanguage;
+  options["targetType"] = this->Reporter.OptionTargetType;
+  options["role"] = this->Reporter.OptionRole;
+  options["config"] = this->Reporter.OptionConfig;
+  std::map<std::string, std::string> arrayOptions;
+  arrayOptions["outputs"] = this->Reporter.OptionOutput;
+  arrayOptions["targetLabels"] = this->Reporter.OptionTargetLabels;
+  instrumentation.InstrumentCommand(
+    this->Reporter.OptionCommandType, this->RealArgV,
+    [this]() -> int {
+      this->RunChild();
+      return this->Reporter.ExitCode;
+    },
+    options, arrayOptions);
 
-  this->LoadConfig();
-  this->Reporter.WriteXML();
+  if (this->Operation == Op::Normal) {
+
+    if (this->CheckResults()) {
+      return this->Reporter.ExitCode;
+    }
+
+    this->LoadConfig();
+    this->Reporter.WriteXML();
+  }
 
   return this->Reporter.ExitCode;
 }
@@ -279,7 +358,7 @@ void cmCTestLaunch::LoadScrapeRules()
 }
 
 void cmCTestLaunch::LoadScrapeRules(
-  const char* purpose, std::vector<cmsys::RegularExpression>& regexps) const
+  char const* purpose, std::vector<cmsys::RegularExpression>& regexps) const
 {
   std::string fname =
     cmStrCat(this->Reporter.LogDir, "Custom", purpose, ".txt");
@@ -314,22 +393,20 @@ bool cmCTestLaunch::ScrapeLog(std::string const& fname)
   return false;
 }
 
-int cmCTestLaunch::Main(int argc, const char* const argv[])
+int cmCTestLaunch::Main(int argc, char const* const argv[], Op operation)
 {
   if (argc == 2) {
     std::cerr << "ctest --launch: this mode is for internal CTest use only"
               << std::endl;
     return 1;
   }
-  cmCTestLaunch self(argc, argv);
+  cmCTestLaunch self(argc, argv, operation);
   return self.Run();
 }
 
 void cmCTestLaunch::LoadConfig()
 {
-  cmake cm(cmake::RoleScript, cmState::CTest);
-  cm.SetHomeDirectory("");
-  cm.SetHomeOutputDirectory("");
+  cmake cm(cmState::Role::CTest);
   cm.GetCurrentSnapshot().SetDefaultDefinitions();
   cmGlobalGenerator gg(&cm);
   cmMakefile mf(&gg, cm.GetCurrentSnapshot());

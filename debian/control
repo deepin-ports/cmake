@@ -7,12 +7,12 @@ Uploaders:
  Felix Geyer <fgeyer@debian.org>,
  Timo Röhling <roehling@debian.org>,
 Build-Depends:
+ debhelper-compat (= 14),
  cmake <cross>,
- debhelper-compat (= 13),
  git <!nocheck>,
  libarchive-dev (>= 3.3.3) <!pkg.cmake.bootstrap>,
  libcppdap-dev <!pkg.cmake.bootstrap>,
- libcurl4-openssl-dev <!pkg.cmake.bootstrap> | libcurl-ssl-dev <!pkg.cmake.bootstrap>,
+ libcurl4-openssl-dev <!pkg.cmake.bootstrap>,
  libexpat1-dev <!pkg.cmake.bootstrap>,
  libjsoncpp-dev <!pkg.cmake.bootstrap>,
  libncurses-dev <!pkg.cmake.bootstrap !pkg.cmake.nogui>,
@@ -22,12 +22,12 @@ Build-Depends:
  procps [!hurd-any],
  python3-sphinx:native,
  python3-sphinxcontrib.qthelp:native,
- qtbase5-dev <!pkg.cmake.bootstrap !pkg.cmake.nogui>,
+ qt6-base-dev <!pkg.cmake.bootstrap !pkg.cmake.nogui>,
  zlib1g-dev <!pkg.cmake.bootstrap>,
 Build-Depends-Indep:
  dh-sequence-sphinxdoc,
 Rules-Requires-Root: no
-Standards-Version: 4.7.0
+Standards-Version: 4.7.4
 Vcs-Git: https://salsa.debian.org/cmake-team/cmake.git
 Vcs-Browser: https://salsa.debian.org/cmake-team/cmake
 Homepage: https://cmake.org/
@@ -44,10 +44,15 @@ Package: cmake
 Architecture: any
 Multi-Arch: foreign
 Depends:
- cmake-data (= ${source:Version}),
  procps [!hurd-any],
  ${misc:Depends},
  ${shlibs:Depends},
+Breaks:
+ cmake-data (<< 4.3),
+Replaces:
+ cmake-data (<< 4.3),
+Provides:
+ cmake-data (= ${binary:Version}),
 Recommends:
  gcc,
  make,
@@ -75,16 +80,15 @@ Description: curses based user interface for CMake (ccmake)
  main executable file for this GUI is "ccmake".
 
 Package: cmake-data
+Section: oldlibs
 Architecture: all
 Multi-Arch: foreign
 Depends:
  ${misc:Depends},
-Description: CMake data files (modules, templates and documentation)
- ${source:Extended-Description}
- .
- This package provides CMake architecture independent data files (modules,
- templates, documentation etc.). Unless you have cmake installed, you probably
- do not need this package.
+Description: CMake data files (transitional dummy package)
+ This package used to provide CMake architecture independent data files
+ (modules, templates, documentation etc.). It is no longer needed and can be
+ safely removed.
 
 Package: cmake-doc
 Architecture: all
@@ -92,7 +96,6 @@ Build-Profiles: <!pkg.cmake.bootstrap>
 Multi-Arch: foreign
 Section: doc
 Depends:
- cmake-data (= ${source:Version}),
  ${misc:Depends},
  ${sphinxdoc:Depends},
 Recommends:

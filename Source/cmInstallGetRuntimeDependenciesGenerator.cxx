@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmInstallGetRuntimeDependenciesGenerator.h"
 
 #include <memory>
@@ -19,13 +19,14 @@
 #include "cmLocalGenerator.h"
 #include "cmMakefile.h"
 #include "cmOutputConverter.h"
+#include "cmPolicies.h"
 #include "cmScriptGenerator.h"
 #include "cmStringAlgorithms.h"
 
 namespace {
 template <typename T, typename F>
-void WriteMultiArgument(std::ostream& os, const cm::string_view& keyword,
-                        const std::vector<T>& list,
+void WriteMultiArgument(std::ostream& os, cm::string_view keyword,
+                        std::vector<T> const& list,
                         cmScriptGeneratorIndent indent, F transform)
 {
   bool first = true;
@@ -42,27 +43,26 @@ void WriteMultiArgument(std::ostream& os, const cm::string_view& keyword,
 }
 
 void WriteFilesArgument(
-  std::ostream& os, const cm::string_view& keyword,
-  const std::vector<std::unique_ptr<cmInstallRuntimeDependencySet::Item>>&
+  std::ostream& os, cm::string_view keyword,
+  std::vector<std::unique_ptr<cmInstallRuntimeDependencySet::Item>> const&
     items,
-  const std::string& config, cmScriptGeneratorIndent indent)
+  std::string const& config, cmScriptGeneratorIndent indent)
 {
   WriteMultiArgument(
     os, keyword, items, indent,
-    [config](const std::unique_ptr<cmInstallRuntimeDependencySet::Item>& i)
+    [config](std::unique_ptr<cmInstallRuntimeDependencySet::Item> const& i)
       -> std::string { return cmStrCat('"', i->GetItemPath(config), '"'); });
 }
 
-void WriteGenexEvaluatorArgument(std::ostream& os,
-                                 const cm::string_view& keyword,
-                                 const std::vector<std::string>& genexes,
-                                 const std::string& config,
+void WriteGenexEvaluatorArgument(std::ostream& os, cm::string_view keyword,
+                                 std::vector<std::string> const& genexes,
+                                 std::string const& config,
                                  cmLocalGenerator* lg,
                                  cmScriptGeneratorIndent indent)
 {
   WriteMultiArgument(
     os, keyword, genexes, indent,
-    [config, lg](const std::string& genex) -> cm::optional<std::string> {
+    [config, lg](std::string const& genex) -> cm::optional<std::string> {
       std::string result = cmGeneratorExpression::Evaluate(genex, lg, config);
       if (result.empty()) {
         return cm::nullopt;
@@ -82,9 +82,10 @@ cmInstallGetRuntimeDependenciesGenerator::
     std::vector<std::string> postExcludeRegexes,
     std::vector<std::string> postIncludeFiles,
     std::vector<std::string> postExcludeFiles, std::string libraryComponent,
-    std::string frameworkComponent, bool noInstallRPath, const char* depsVar,
-    const char* rpathPrefix, std::vector<std::string> const& configurations,
-    MessageLevel message, bool exclude_from_all, cmListFileBacktrace backtrace)
+    std::string frameworkComponent, bool noInstallRPath, char const* depsVar,
+    char const* rpathPrefix, std::vector<std::string> const& configurations,
+    MessageLevel message, bool exclude_from_all, cmListFileBacktrace backtrace,
+    cmPolicies::PolicyStatus policyStatusCMP0207)
   : cmInstallGenerator("", configurations, "", message, exclude_from_all,
                        false, std::move(backtrace))
   , RuntimeDependencySet(runtimeDependencySet)
@@ -97,6 +98,7 @@ cmInstallGetRuntimeDependenciesGenerator::
   , PostExcludeFiles(std::move(postExcludeFiles))
   , LibraryComponent(std::move(libraryComponent))
   , FrameworkComponent(std::move(frameworkComponent))
+  , PolicyStatusCMP0207(policyStatusCMP0207)
   , NoInstallRPath(noInstallRPath)
   , DepsVar(depsVar)
   , RPathPrefix(rpathPrefix)
@@ -136,12 +138,20 @@ void cmInstallGetRuntimeDependenciesGenerator::GenerateScript(std::ostream& os)
 }
 
 void cmInstallGetRuntimeDependenciesGenerator::GenerateScriptForConfig(
-  std::ostream& os, const std::string& config, Indent indent)
+  std::ostream& os, std::string const& config, Indent indent)
 {
   std::string installNameTool =
     this->LocalGenerator->GetMakefile()->GetSafeDefinition(
       "CMAKE_INSTALL_NAME_TOOL");
 
+  Indent inputIndent = indent;
+  if (this->PolicyStatusCMP0207 != cmPolicies::WARN) {
+    indent = indent.Next();
+    os << inputIndent << "block(SCOPE_FOR POLICIES)\n"
+       << indent << "cmake_policy(SET CMP0207 "
+       << (this->PolicyStatusCMP0207 == cmPolicies::NEW ? "NEW" : "OLD")
+       << ")\n";
+  }
   os << indent << "file(GET_RUNTIME_DEPENDENCIES\n"
      << indent << "  RESOLVED_DEPENDENCIES_VAR " << this->DepsVar << '\n';
   WriteFilesArgument(os, "EXECUTABLES"_s,
@@ -182,7 +192,7 @@ void cmInstallGetRuntimeDependenciesGenerator::GenerateScriptForConfig(
   std::set<std::string> postExcludeFiles;
   auto const addPostExclude =
     [config, &postExcludeFiles, this](
-      const std::vector<std::unique_ptr<cmInstallRuntimeDependencySet::Item>>&
+      std::vector<std::unique_ptr<cmInstallRuntimeDependencySet::Item>> const&
         tgts) {
       for (auto const& item : tgts) {
         item->AddPostExcludeFiles(config, postExcludeFiles,
@@ -205,4 +215,8 @@ void cmInstallGetRuntimeDependenciesGenerator::GenerateScriptForConfig(
     os << indent << "  RPATH_PREFIX " << this->RPathPrefix << '\n';
   }
   os << indent << "  )\n";
+
+  if (this->PolicyStatusCMP0207 != cmPolicies::WARN) {
+    os << inputIndent << "endblock()\n";
+  }
 }

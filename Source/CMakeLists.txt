@@ -1,5 +1,5 @@
 # Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-# file Copyright.txt or https://cmake.org/licensing for details.
+# file LICENSE.rst or https://cmake.org/licensing for details.
 
 # To ensure maximum portability across various compilers and platforms
 # deactivate any compiler extensions.  Skip this for QNX, where additional
@@ -62,12 +62,6 @@ add_library(ManifestLib INTERFACE)
 add_library(
   CMakeLib
   # Lexers/Parsers
-  LexerParser/cmCommandArgumentLexer.cxx
-  LexerParser/cmCommandArgumentLexer.h
-  LexerParser/cmCommandArgumentLexer.in.l
-  LexerParser/cmCommandArgumentParser.cxx
-  LexerParser/cmCommandArgumentParserTokens.h
-  LexerParser/cmCommandArgumentParser.y
   LexerParser/cmDependsJavaLexer.cxx
   LexerParser/cmDependsJavaLexer.h
   LexerParser/cmDependsJavaLexer.in.l
@@ -121,6 +115,7 @@ add_library(
   cmBinUtilsWindowsPELinker.h
   cmBinUtilsWindowsPEObjdumpGetRuntimeDependenciesTool.cxx
   cmBinUtilsWindowsPEObjdumpGetRuntimeDependenciesTool.h
+  cmBuildArgs.h
   cmBuildDatabase.cxx
   cmBuildDatabase.h
   cmBuildOptions.h
@@ -141,7 +136,8 @@ add_library(
   cmCMakePresetsGraphReadJSONPackagePresets.cxx
   cmCMakePresetsGraphReadJSONTestPresets.cxx
   cmCMakePresetsGraphReadJSONWorkflowPresets.cxx
-  cmCommandArgumentParserHelper.cxx
+  cmCMakeString.hxx
+  cmCMakeString.cxx
   cmCommandLineArgument.h
   cmCommonTargetGenerator.cxx
   cmCommonTargetGenerator.h
@@ -155,8 +151,6 @@ add_library(
   cmComputeTargetDepends.cxx
   cmConfigureLog.h
   cmConfigureLog.cxx
-  cmConsoleBuf.h
-  cmConsoleBuf.cxx
   cmConstStack.h
   cmConstStack.tcc
   cmCPackPropertiesGenerator.h
@@ -174,6 +168,8 @@ add_library(
   cmCustomCommandTypes.h
   cmCxxModuleMapper.cxx
   cmCxxModuleMapper.h
+  cmCxxModuleMetadata.cxx
+  cmCxxModuleMetadata.h
   cmCxxModuleUsageEffects.cxx
   cmCxxModuleUsageEffects.h
   cmDefinitions.cxx
@@ -193,8 +189,6 @@ add_library(
   cmDependsCompiler.h
   cmDocumentation.cxx
   cmDocumentationFormatter.cxx
-  cmDynamicLoader.cxx
-  cmDynamicLoader.h
   cmDyndepCollation.cxx
   cmDyndepCollation.h
   cmELF.h
@@ -210,6 +204,10 @@ add_library(
   cmExportBuildCMakeConfigGenerator.cxx
   cmExportBuildFileGenerator.h
   cmExportBuildFileGenerator.cxx
+  cmExportBuildPackageInfoGenerator.h
+  cmExportBuildPackageInfoGenerator.cxx
+  cmExportBuildSbomGenerator.h
+  cmExportBuildSbomGenerator.cxx
   cmExportCMakeConfigGenerator.h
   cmExportCMakeConfigGenerator.cxx
   cmExportFileGenerator.h
@@ -222,10 +220,14 @@ add_library(
   cmExportInstallFileGenerator.cxx
   cmExportInstallPackageInfoGenerator.h
   cmExportInstallPackageInfoGenerator.cxx
+  cmExportInstallSbomGenerator.h
+  cmExportInstallSbomGenerator.cxx
   cmExportPackageInfoGenerator.h
   cmExportPackageInfoGenerator.cxx
   cmExportTryCompileFileGenerator.h
   cmExportTryCompileFileGenerator.cxx
+  cmExportSbomGenerator.h
+  cmExportSbomGenerator.cxx
   cmExportSet.h
   cmExportSet.cxx
   cmExternalMakefileProjectGenerator.cxx
@@ -281,9 +283,11 @@ add_library(
   cmGccDepfileLexerHelper.h
   cmGccDepfileReader.cxx
   cmGccDepfileReader.h
+  cmGenExContext.cxx
+  cmGenExContext.h
+  cmGenExEvaluation.cxx
+  cmGenExEvaluation.h
   cmGeneratedFileStream.cxx
-  cmGeneratorExpressionContext.cxx
-  cmGeneratorExpressionContext.h
   cmGeneratorExpressionDAGChecker.cxx
   cmGeneratorExpressionDAGChecker.h
   cmGeneratorExpressionEvaluationFile.cxx
@@ -349,6 +353,8 @@ add_library(
   cmInstallRuntimeDependencySet.cxx
   cmInstallRuntimeDependencySetGenerator.h
   cmInstallRuntimeDependencySetGenerator.cxx
+  cmInstallSbomExportGenerator.h
+  cmInstallSbomExportGenerator.cxx
   cmInstallScriptGenerator.h
   cmInstallScriptGenerator.cxx
   cmInstallSubdirectoryGenerator.h
@@ -359,6 +365,12 @@ add_library(
   cmInstallDirectoryGenerator.cxx
   cmInstallScriptHandler.h
   cmInstallScriptHandler.cxx
+  cmInstrumentation.h
+  cmInstrumentation.cxx
+  cmInstrumentationCommand.h
+  cmInstrumentationCommand.cxx
+  cmInstrumentationQuery.h
+  cmInstrumentationQuery.cxx
   cmJSONHelpers.cxx
   cmJSONHelpers.h
   cmJSONState.cxx
@@ -391,7 +403,6 @@ add_library(
   cmRulePlaceholderExpander.cxx
   cmRulePlaceholderExpander.h
   cmLocalUnixMakefileGenerator3.cxx
-  cmLocale.h
   cmMakefile.cxx
   cmMakefile.h
   cmMakefileTargetGenerator.cxx
@@ -406,12 +417,21 @@ add_library(
   cmMSVC60LinkLineComputer.h
   cmOSXBundleGenerator.cxx
   cmOSXBundleGenerator.h
+  cmObjectLocation.cxx
+  cmObjectLocation.h
   cmOutputConverter.cxx
   cmOutputConverter.h
   cmNewLineStyle.h
   cmNewLineStyle.cxx
   cmOrderDirectories.cxx
   cmOrderDirectories.h
+  cmPackageInfoArguments.cxx
+  cmPackageInfoArguments.h
+  cmPackageInfoReader.cxx
+  cmPackageInfoReader.h
+  cmPackageState.h
+  cmPathResolver.cxx
+  cmPathResolver.h
   cmPlistParser.cxx
   cmPlistParser.h
   cmPolicies.h
@@ -420,6 +440,8 @@ add_library(
   cmProcessOutput.h
   cmProcessTools.cxx
   cmProcessTools.h
+  cmProjectInfoArguments.cxx
+  cmProjectInfoArguments.h
   cmValue.cxx
   cmValue.h
   cmProperty.h
@@ -443,6 +465,8 @@ add_library(
   cmRST.h
   cmRuntimeDependencyArchive.cxx
   cmRuntimeDependencyArchive.h
+  cmSarifLog.cxx
+  cmSarifLog.h
   cmScriptGenerator.h
   cmScriptGenerator.cxx
   cmSourceFile.cxx
@@ -462,6 +486,14 @@ add_library(
   cmStateSnapshot.cxx
   cmStateSnapshot.h
   cmStateTypes.h
+  cmStdIoConsole.h
+  cmStdIoConsole.cxx
+  cmStdIoInit.h
+  cmStdIoInit.cxx
+  cmStdIoStream.h
+  cmStdIoStream.cxx
+  cmStdIoTerminal.h
+  cmStdIoTerminal.cxx
   cmStringAlgorithms.cxx
   cmStringAlgorithms.h
   cmSyntheticTargetCache.h
@@ -489,6 +521,7 @@ add_library(
   cmUVStreambuf.h
   cmVariableWatch.cxx
   cmVariableWatch.h
+  cmVersion_Dependencies.cxx
   cmVersion.cxx
   cmVersion.h
   cmWindowsRegistry.cxx
@@ -508,8 +541,6 @@ add_library(
   cmake.cxx
   cmake.h
 
-  cmCommand.cxx
-  cmCommand.h
   cmCommands.cxx
   cmCommands.h
   cmAddCompileDefinitionsCommand.cxx
@@ -540,8 +571,6 @@ add_library(
   cmBreakCommand.h
   cmBuildCommand.cxx
   cmBuildCommand.h
-  cmBuildNameCommand.cxx
-  cmBuildNameCommand.h
   cmCMakeHostSystemInformationCommand.cxx
   cmCMakeHostSystemInformationCommand.h
   cmCMakeLanguageCommand.cxx
@@ -580,8 +609,6 @@ add_library(
   cmExperimental.h
   cmExportCommand.cxx
   cmExportCommand.h
-  cmExportLibraryDependenciesCommand.cxx
-  cmExportLibraryDependenciesCommand.h
   cmFLTKWrapUICommand.cxx
   cmFLTKWrapUICommand.h
   cmFileCommand.cxx
@@ -660,8 +687,6 @@ add_library(
   cmListCommand.h
   cmLoadCacheCommand.cxx
   cmLoadCacheCommand.h
-  cmLoadCommandCommand.cxx
-  cmLoadCommandCommand.h
   cmMacroCommand.cxx
   cmMacroCommand.h
   cmMakeDirectoryCommand.cxx
@@ -675,8 +700,6 @@ add_library(
   cmMessageMetadata.h
   cmOptionCommand.cxx
   cmOptionCommand.h
-  cmOutputRequiredFilesCommand.cxx
-  cmOutputRequiredFilesCommand.h
   cmParseArgumentsCommand.cxx
   cmParseArgumentsCommand.h
   cmPathLabel.cxx
@@ -693,6 +716,10 @@ add_library(
   cmRemoveDefinitionsCommand.h
   cmReturnCommand.cxx
   cmReturnCommand.h
+  cmSbomArguments.h
+  cmSbomArguments.cxx
+  cmSbomObject.h
+  cmSbomSerializer.h
   cmSearchPath.cxx
   cmSearchPath.h
   cmSeparateArgumentsCommand.cxx
@@ -713,6 +740,10 @@ add_library(
   cmSiteNameCommand.h
   cmSourceGroupCommand.cxx
   cmSourceGroupCommand.h
+  cmSpdx.cxx
+  cmSpdx.h
+  cmSpdxSerializer.cxx
+  cmSpdxSerializer.h
   cmString.cxx
   cmString.hxx
   cmStringReplaceHelper.cxx
@@ -722,8 +753,6 @@ add_library(
   cmSubcommandTable.h
   cmSubdirCommand.cxx
   cmSubdirCommand.h
-  cmSubdirDependsCommand.cxx
-  cmSubdirDependsCommand.h
   cmTargetCompileDefinitionsCommand.cxx
   cmTargetCompileDefinitionsCommand.h
   cmTargetCompileFeaturesCommand.cxx
@@ -752,12 +781,6 @@ add_library(
   cmTryRunCommand.h
   cmUnsetCommand.cxx
   cmUnsetCommand.h
-  cmUseMangledMesaCommand.cxx
-  cmUseMangledMesaCommand.h
-  cmUtilitySourceCommand.cxx
-  cmUtilitySourceCommand.h
-  cmVariableRequiresCommand.cxx
-  cmVariableRequiresCommand.h
   cmVariableWatchCommand.cxx
   cmVariableWatchCommand.h
   cmWhileCommand.cxx
@@ -781,9 +804,21 @@ add_library(
   cmNinjaLinkLineComputer.h
   cmNinjaLinkLineDeviceComputer.cxx
   cmNinjaLinkLineDeviceComputer.h
+  # FASTBuild support
+  cmGlobalFastbuildGenerator.cxx
+  cmGlobalFastbuildGenerator.h
+  cmLocalFastbuildGenerator.cxx
+  cmLocalFastbuildGenerator.h
+  cmFastbuildTargetGenerator.cxx
+  cmFastbuildTargetGenerator.h
+  cmFastbuildLinkLineComputer.cxx
+  cmFastbuildNormalTargetGenerator.cxx
+  cmFastbuildNormalTargetGenerator.h
+  cmFastbuildUtilityTargetGenerator.cxx
+  cmFastbuildUtilityTargetGenerator.h
 
-  cm_get_date.h
-  cm_get_date.c
+  cm_parse_date.h
+  cm_parse_date.c
   cm_utf8.h
   cm_utf8.c
   cm_codecvt.hxx
@@ -922,8 +957,6 @@ if(WIN32)
         cmGlobalNMakeMakefileGenerator.h
         cmGlobalJOMMakefileGenerator.cxx
         cmGlobalJOMMakefileGenerator.h
-        cmGlobalVisualStudio71Generator.cxx
-        cmGlobalVisualStudio71Generator.h
         cmGlobalVisualStudio7Generator.cxx
         cmGlobalVisualStudio7Generator.h
         cmGlobalVisualStudio8Generator.cxx
@@ -962,11 +995,18 @@ if(WIN32)
         cmVisualStudioWCEPlatformParser.cxx
         cmVSSetupHelper.cxx
         cmVSSetupHelper.h
+        cmVSSolution.cxx
+        cmVSSolution.h
+        cmVSVersion.h
       )
 
     # Add a manifest file to executables on Windows to allow for
     # GetVersion to work properly on Windows 8 and above.
-    target_sources(ManifestLib INTERFACE cmake.version.manifest)
+    if(MSVC)
+      target_sources(ManifestLib INTERFACE cmake.version.manifest)
+    else()
+      target_sources(ManifestLib INTERFACE cmake.version.manifest.rc)
+    endif()
   endif()
 endif()
 
@@ -1026,7 +1066,6 @@ if(CMake_BUILD_PCH)
     set_source_files_properties("LexerParser/cmFortranParser.cxx" PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
   else()
     set_source_files_properties(
-      "LexerParser/cmCommandArgumentLexer.cxx"
       "LexerParser/cmGccDepfileLexer.cxx"
       "LexerParser/cmExprLexer.cxx"
       "LexerParser/cmDependsJavaLexer.cxx"
@@ -1042,6 +1081,15 @@ if(WIN32 AND NOT CYGWIN)
   add_executable(cmcldeps cmcldeps.cxx)
   target_link_libraries(cmcldeps PRIVATE CMakeLib ManifestLib)
   list(APPEND _tools cmcldeps)
+endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "SunOS" AND CMAKE_SYSTEM_VERSION STREQUAL "5.10" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(i386|x86_64)$")
+  set_property(SOURCE cmSystemTools.cxx APPEND PROPERTY COMPILE_DEFINITIONS CMAKE_NO_MKDTEMP)
+endif()
+get_property(targetSupportsSharedLibs GLOBAL PROPERTY TARGET_SUPPORTS_SHARED_LIBS)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT targetSupportsSharedLibs)
+  # Disable getpwnam for static linux builds since it depends on shared glibc.
+  set_property(SOURCE cmSystemTools.cxx APPEND PROPERTY COMPILE_DEFINITIONS CMAKE_NO_GETPWNAM)
 endif()
 
 # Some atomic instructions are implemented using libatomic on some platforms.
@@ -1071,11 +1119,11 @@ add_library(
   cmCTest.cxx
   CTest/cmProcess.cxx
   CTest/cmCTestBinPacker.cxx
-  CTest/cmCTestBuildAndTestHandler.cxx
+  CTest/cmCTestBuildAndTest.cxx
   CTest/cmCTestBuildCommand.cxx
   CTest/cmCTestBuildHandler.cxx
+  CTest/cmCTestCommand.cxx
   CTest/cmCTestConfigureCommand.cxx
-  CTest/cmCTestConfigureHandler.cxx
   CTest/cmCTestCoverageCommand.cxx
   CTest/cmCTestCoverageHandler.cxx
   CTest/cmCTestCurl.cxx
@@ -1109,10 +1157,9 @@ add_library(
   CTest/cmCTestTestCommand.cxx
   CTest/cmCTestTestHandler.cxx
   CTest/cmCTestTestMeasurementXMLParser.cxx
+  CTest/cmCTestTypes.cxx
   CTest/cmCTestUpdateCommand.cxx
-  CTest/cmCTestUpdateHandler.cxx
   CTest/cmCTestUploadCommand.cxx
-  CTest/cmCTestUploadHandler.cxx
 
   CTest/cmCTestVC.cxx
   CTest/cmCTestVC.h
@@ -1171,7 +1218,9 @@ add_library(
   CPack/cmCPackArchiveGenerator.cxx
   CPack/cmCPackComponentGroup.cxx
   CPack/cmCPackDebGenerator.cxx
+  CPack/cmCPackDebGenerator.h
   CPack/cmCPackExternalGenerator.cxx
+  CPack/cmCPackExternalGenerator.h
   CPack/cmCPackGeneratorFactory.cxx
   CPack/cmCPackGenerator.cxx
   CPack/cmCPackLog.cxx
@@ -1234,6 +1283,15 @@ if(UNIX)
     set(FREEBSD_PKG_INCLUDE_DIRS NOTFOUND)
     set(FREEBSD_PKG_LIBRARIES NOTFOUND)
   endif()
+endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_sources(
+    CPackLib
+    PRIVATE
+      CPack/cmCPackAppImageGenerator.cxx
+      CPack/cmCPackAppImageGenerator.h
+    )
 endif()
 
 if(CYGWIN)
@@ -1374,10 +1432,8 @@ endif()
 
 foreach(_tool IN LISTS _tools)
   CMake_OPTIONAL_COMPONENT(${_tool})
-  install(TARGETS ${_tool} DESTINATION ${CMAKE_BIN_DIR} ${COMPONENT})
+  install(TARGETS ${_tool} DESTINATION ${CMake_INSTALL_BIN_DIR} ${COMPONENT})
 endforeach()
-
-install(FILES cmCPluginAPI.h DESTINATION ${CMAKE_DATA_DIR}/include)
 
 # Unset temporary variables
 unset(_tools)

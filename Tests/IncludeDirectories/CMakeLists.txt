@@ -14,6 +14,7 @@ if (((CMAKE_C_COMPILER_ID STREQUAL GNU AND CMAKE_C_COMPILER_VERSION VERSION_GREA
        CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL "19.29.30036.3"))
     AND (CMAKE_GENERATOR STREQUAL "Unix Makefiles"
       OR CMAKE_GENERATOR STREQUAL "Ninja"
+      OR CMAKE_GENERATOR STREQUAL "FASTBuild"
       OR (CMAKE_GENERATOR STREQUAL "Xcode" AND NOT XCODE_VERSION VERSION_LESS 6.0)
       OR CMAKE_GENERATOR MATCHES "Visual Studio"))
   if ("x${CMAKE_C_COMPILER_ID}" STREQUAL "xMSVC")
@@ -205,8 +206,4 @@ include_directories(/one/two
 get_target_property(incs empty_entry_test INCLUDE_DIRECTORIES)
 if (NOT incs STREQUAL ";/one/two")
   message(SEND_ERROR "Empty include_directories entry was not ignored.")
-endif()
-
-if(NOT CMAKE_GENERATOR STREQUAL "Xcode" AND NOT CMAKE_GENERATOR MATCHES "Ninja")
-  add_subdirectory(CMP0021)
 endif()

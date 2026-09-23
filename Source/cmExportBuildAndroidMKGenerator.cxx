@@ -1,13 +1,13 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmExportBuildAndroidMKGenerator.h"
 
+#include <functional>
 #include <sstream>
 #include <vector>
 
 #include "cmGeneratorExpression.h"
 #include "cmGeneratorTarget.h"
-#include "cmPolicies.h"
 #include "cmStateTypes.h"
 #include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
@@ -34,13 +34,8 @@ bool cmExportBuildAndroidMKGenerator::GenerateMainFile(std::ostream& os)
       return false;
     }
 
-    bool const newCMP0022Behavior =
-      gte->GetPolicyStatusCMP0022() != cmPolicies::WARN &&
-      gte->GetPolicyStatusCMP0022() != cmPolicies::OLD;
-    if (newCMP0022Behavior) {
-      this->PopulateInterfaceLinkLibrariesProperty(
-        gte, cmGeneratorExpression::BuildInterface, properties);
-    }
+    this->PopulateInterfaceLinkLibrariesProperty(
+      gte, cmGeneratorExpression::BuildInterface, properties);
 
     this->GenerateInterfaceProperties(gte, os, properties);
   }

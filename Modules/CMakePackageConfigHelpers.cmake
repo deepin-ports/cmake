@@ -1,19 +1,28 @@
 # Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-# file Copyright.txt or https://cmake.org/licensing for details.
+# file LICENSE.rst or https://cmake.org/licensing for details.
 
 #[=======================================================================[.rst:
 CMakePackageConfigHelpers
 -------------------------
 
-Helper functions for creating config files that can be included by other
+This module provides helper commands for creating :ref:`config files
+<Libraries providing Config-file packages>` that can be included by other
 projects to find and use a package.
+
+Load this module in a CMake project with:
+
+.. code-block:: cmake
+
+  include(CMakePackageConfigHelpers)
 
 Generating a Package Configuration File
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. command:: configure_package_config_file
 
- Create a config file for a project::
+ Create a config file for a project:
+
+ .. code-block:: cmake
 
    configure_package_config_file(<input> <output>
      INSTALL_DESTINATION <path>
@@ -132,7 +141,9 @@ Generating a Package Version File
 
 .. command:: write_basic_package_version_file
 
- Create a version file for a project::
+ Create a version file for a project:
+
+ .. code-block:: cmake
 
    write_basic_package_version_file(<filename>
      [VERSION <major.minor.patch>]
@@ -394,6 +405,7 @@ Example using both the :command:`configure_package_config_file` and
    set_and_check(FOO_SYSCONFIG_DIR "@PACKAGE_SYSCONFIG_INSTALL_DIR@")
 
    check_required_components(Foo)
+
 #]=======================================================================]
 
 include(WriteBasicConfigVersionFile)

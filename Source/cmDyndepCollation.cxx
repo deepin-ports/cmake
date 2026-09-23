@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 
 #include "cmDyndepCollation.h"
 
@@ -17,9 +17,11 @@
 #include <cm3p/json/value.h>
 
 #include "cmBuildDatabase.h"
+#include "cmCxxModuleMetadata.h"
 #include "cmExportBuildFileGenerator.h"
 #include "cmExportSet.h"
 #include "cmFileSet.h"
+#include "cmGenExContext.h"
 #include "cmGeneratedFileStream.h"
 #include "cmGeneratorExpression.h" // IWYU pragma: keep
 #include "cmGeneratorTarget.h"
@@ -28,6 +30,7 @@
 #include "cmInstallExportGenerator.h"
 #include "cmInstallFileSetGenerator.h"
 #include "cmInstallGenerator.h"
+#include "cmListFileCache.h"
 #include "cmMakefile.h"
 #include "cmMessageType.h"
 #include "cmOutputConverter.h"
@@ -50,6 +53,7 @@ TdiSourceInfo CollationInformationSources(cmGeneratorTarget const* gt,
                                           std::string const& config,
                                           cmDyndepGeneratorCallbacks const& cb)
 {
+  cm::GenEx::Context const context(gt->LocalGenerator, config);
   TdiSourceInfo info;
   cmTarget const* tgt = gt->Target;
   auto all_file_sets = tgt->GetAllFileSetNames();
@@ -108,12 +112,12 @@ TdiSourceInfo CollationInformationSources(cmGeneratorTarget const* gt,
     auto fileEntries = file_set->CompileFileEntries();
     auto directoryEntries = file_set->CompileDirectoryEntries();
 
-    auto directories = file_set->EvaluateDirectoryEntries(
-      directoryEntries, gt->LocalGenerator, config, gt);
+    auto directories =
+      file_set->EvaluateDirectoryEntries(directoryEntries, context, gt);
     std::map<std::string, std::vector<std::string>> files_per_dirs;
     for (auto const& entry : fileEntries) {
-      file_set->EvaluateFileEntry(directories, files_per_dirs, entry,
-                                  gt->LocalGenerator, config, gt);
+      file_set->EvaluateFileEntry(directories, files_per_dirs, entry, context,
+                                  gt);
     }
 
     Json::Value fs_dest = Json::nullValue;
@@ -172,6 +176,30 @@ TdiSourceInfo CollationInformationSources(cmGeneratorTarget const* gt,
           : cb.BmiFilePath(sf, config);
         Json::Value& tdi_module_info = tdi_cxx_module_info[obj_path] =
           Json::objectValue;
+
+        Json::Value& tdi_include_dirs =
+          tdi_module_info["include-directories"] = Json::arrayValue;
+        for (auto const& i : gt->GetIncludeDirectories(config, "CXX")) {
+          tdi_include_dirs.append(i.Value);
+        }
+
+        Json::Value& tdi_defs = tdi_module_info["definitions"] =
+          Json::arrayValue;
+        for (auto const& i : gt->GetCompileDefinitions(config, "CXX")) {
+          tdi_defs.append(i.Value);
+        }
+
+        Json::Value& tdi_opts = tdi_module_info["compile-options"] =
+          Json::arrayValue;
+        for (auto const& i : gt->GetCompileOptions(config, "CXX")) {
+          tdi_opts.append(i.Value);
+        }
+
+        Json::Value& tdi_feats = tdi_module_info["compile-features"] =
+          Json::arrayValue;
+        for (auto const& i : gt->GetCompileFeatures(config)) {
+          tdi_feats.append(i.Value);
+        }
 
         tdi_module_info["source"] = full_file;
         tdi_module_info["bmi-only"] = ct == CompileType::BmiOnly;
@@ -239,7 +267,7 @@ Json::Value CollationInformationBmiInstallation(cmGeneratorTarget const* gt,
 
     tdi_bmi_info["permissions"] = bmi_gen->GetFilePermissions();
     tdi_bmi_info["destination"] = bmi_gen->GetDestination(config);
-    const char* msg_level = "";
+    char const* msg_level = "";
     switch (bmi_gen->GetMessageLevel()) {
       case cmInstallGenerator::MessageDefault:
         break;
@@ -341,6 +369,7 @@ Json::Value CollationInformationExports(cmGeneratorTarget const* gt)
 
   return tdi_exports;
 }
+
 }
 
 void cmDyndepCollation::AddCollationInformation(
@@ -371,6 +400,10 @@ struct CxxModuleFileSet
   std::string Type;
   cmFileSetVisibility Visibility = cmFileSetVisibility::Private;
   cm::optional<std::string> Destination;
+  std::vector<std::string> IncludeDirectories;
+  std::vector<std::string> Definitions;
+  std::vector<std::string> CompileOptions;
+  std::vector<std::string> CompileFeatures;
 };
 
 struct CxxModuleDatabaseInfo
@@ -399,6 +432,13 @@ struct CxxModuleExport
   std::string CxxModuleInfoDir;
   std::string Namespace;
   bool Install;
+};
+
+struct CxxModuleExportOutputHelper
+{
+  CxxModuleExport const* Export;
+  std::unique_ptr<cmGeneratedFileStream> File;
+  cmCxxModuleMetadata Manifest;
 };
 
 struct cmCxxModuleExportInfo
@@ -487,6 +527,18 @@ cmDyndepCollation::ParseExportInfo(Json::Value const& tdi)
       if (tdi_fs_dest.isString()) {
         fsi.Destination = tdi_fs_dest.asString();
       }
+      for (auto const& j : tdi_cxx_module_info["include-directories"]) {
+        fsi.IncludeDirectories.push_back(j.asString());
+      }
+      for (auto const& j : tdi_cxx_module_info["definitions"]) {
+        fsi.Definitions.push_back(j.asString());
+      }
+      for (auto const& j : tdi_cxx_module_info["compile-options"]) {
+        fsi.CompileOptions.push_back(j.asString());
+      }
+      for (auto const& j : tdi_cxx_module_info["compile-features"]) {
+        fsi.CompileFeatures.push_back(j.asString());
+      }
     }
   }
   Json::Value const& tdi_sources = tdi["sources"];
@@ -518,25 +570,30 @@ bool cmDyndepCollation::WriteDyndepMetadata(
   // Prepare the export information blocks.
   std::string const config_upper =
     cmSystemTools::UpperCase(export_info.Config);
-  std::vector<
-    std::pair<std::unique_ptr<cmGeneratedFileStream>, CxxModuleExport const*>>
-    exports;
+  std::vector<CxxModuleExportOutputHelper> exports;
   for (auto const& exp : export_info.Exports) {
-    std::unique_ptr<cmGeneratedFileStream> properties;
+    CxxModuleExportOutputHelper exp_helper;
 
     std::string const export_dir =
       cmStrCat(exp.Prefix, '/', exp.CxxModuleInfoDir, '/');
     std::string const property_file_path =
-      cmStrCat(export_dir, "target-", exp.FilesystemName, '-',
-               export_info.Config, ".cmake");
-    properties = cm::make_unique<cmGeneratedFileStream>(property_file_path);
+      cmStrCat(export_dir, "target-"_s, exp.FilesystemName, '-',
+               export_info.Config, ".cmake"_s);
+    exp_helper.Manifest.MetadataFilePath =
+      cmStrCat(exp.Destination, '/', exp.CxxModuleInfoDir, "/target-"_s,
+               exp.FilesystemName, '-', export_info.Config, ".modules.json"_s);
+
+    exp_helper.File =
+      cm::make_unique<cmGeneratedFileStream>(property_file_path);
 
     // Set up the preamble.
-    *properties << "set_property(TARGET \"" << exp.Namespace << exp.Name
-                << "\"\n"
-                << "  PROPERTY IMPORTED_CXX_MODULES_" << config_upper << '\n';
+    *exp_helper.File << "set_property(TARGET \"" << exp.Namespace << exp.Name
+                     << "\"\n"
+                        "  PROPERTY IMPORTED_CXX_MODULES_"
+                     << config_upper << '\n';
 
-    exports.emplace_back(std::move(properties), &exp);
+    exp_helper.Export = &exp;
+    exports.emplace_back(std::move(exp_helper));
   }
 
   std::unique_ptr<cmBuildDatabase> module_database;
@@ -644,6 +701,9 @@ bool cmDyndepCollation::WriteDyndepMetadata(
             result = false;
           }
         }
+        for (auto const& req : object.Requires) {
+          bdb_entry->second->Requires.push_back(req.LogicalName);
+        }
       } else if (export_info.DatabaseInfo) {
         cmSystemTools::Error(cmStrCat(
           "Failed to find module database entry for ", file_set.SourcePath));
@@ -709,25 +769,30 @@ bool cmDyndepCollation::WriteDyndepMetadata(
       auto m = cb.ModuleFile(p.LogicalName);
       if (m) {
         install_bmi_path = cmStrCat(
-          bmi_destination, cmEscape(cmSystemTools::GetFilenameName(*m)));
+          bmi_destination, cmEscape(cmSystemTools::GetFilenameNameView(*m)));
         build_bmi_path = cmEscape(*m);
       }
 
-      for (auto const& exp : exports) {
+      for (auto& exp : exports) {
         std::string iface_source;
-        if (exp.second->Install && file_set.Destination) {
-          auto dest = install_destination(*file_set.Destination);
+        cmCxxModuleMetadata::ModuleData mod;
+
+        if (exp.Export->Install && file_set.Destination) {
+          auto rel =
+            cmStrCat('/', file_set.RelativeDirectory,
+                     cmSystemTools::GetFilenameNameView(file_set.SourcePath));
           iface_source = cmStrCat(
-            dest.second, '/', cmEscape(file_set.RelativeDirectory),
-            cmEscape(cmSystemTools::GetFilenameName(file_set.SourcePath)));
+            install_destination(*file_set.Destination).second, cmEscape(rel));
+          mod.SourcePath = cmStrCat(*file_set.Destination, rel);
         } else {
           iface_source = cmEscape(file_set.SourcePath);
+          mod.SourcePath = file_set.SourcePath;
         }
 
         std::string bmi_path;
-        if (exp.second->Install && export_info.BmiInstallation) {
+        if (exp.Export->Install && export_info.BmiInstallation) {
           bmi_path = install_bmi_path;
-        } else if (!exp.second->Install) {
+        } else if (!exp.Export->Install) {
           bmi_path = build_bmi_path;
         }
 
@@ -737,12 +802,23 @@ bool cmDyndepCollation::WriteDyndepMetadata(
           continue;
         }
 
-        *exp.first << "    \"" << cmEscape(p.LogicalName) << '='
-                   << iface_source;
+        mod.LogicalName = p.LogicalName;
+        mod.IsInterface = p.IsInterface;
+
+        // FIXME(#27565): Local arguments may refer to include directories or
+        // other resources which live in unknown locations on the consuming
+        // machine. There's no general-purpose way to solve this with module
+        // manifests as currently specified. For now, forego serializing them
+        // and rely on CPS to fill in the blanks.
+
+        exp.Manifest.Modules.emplace_back(std::move(mod));
+
+        *exp.File << "    \"" << cmEscape(p.LogicalName) << '='
+                  << iface_source;
         if (!bmi_path.empty()) {
-          *exp.first << ',' << bmi_path;
+          *exp.File << ',' << bmi_path;
         }
-        *exp.first << "\"\n";
+        *exp.File << "\"\n";
       }
 
       if (bmi_install_script) {
@@ -777,7 +853,7 @@ bool cmDyndepCollation::WriteDyndepMetadata(
           *bmi_install_script
             << "  list(APPEND CMAKE_ABSOLUTE_DESTINATION_FILES\n"
                "    \""
-            << cmEscape(cmSystemTools::GetFilenameName(*m))
+            << cmEscape(cmSystemTools::GetFilenameNameView(*m))
             << "\")\n"
                "  if (CMAKE_WARN_ON_ABSOLUTE_INSTALL_DESTINATION)\n"
                "    message(WARNING\n"
@@ -795,9 +871,15 @@ bool cmDyndepCollation::WriteDyndepMetadata(
     }
   }
 
-  // Add trailing parenthesis for the `set_property` call.
   for (auto const& exp : exports) {
-    *exp.first << ")\n";
+
+    cmCxxModuleMetadata::SaveToFile(
+      cmStrCat(exp.Export->Prefix, '/', exp.Export->CxxModuleInfoDir,
+               "/target-"_s, exp.Export->FilesystemName, '-',
+               export_info.Config, ".modules.json"_s),
+      exp.Manifest);
+
+    *exp.File << ")\n";
   }
 
   // Check that public sources only require public modules.

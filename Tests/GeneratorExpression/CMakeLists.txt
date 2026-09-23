@@ -260,6 +260,8 @@ add_custom_target(check-part3 ALL
     -Dconfig=$<CONFIGURATION>
     -Dtest_imported_includes=$<TARGET_PROPERTY:imported4,INCLUDE_DIRECTORIES>
     -Dtest_imported_fallback=$<STREQUAL:$<TARGET_FILE_NAME:importedFallback>,fallback_loc>
+    # NOTE: CMP0200 results in this evaluating to fallback_loc on platforms
+    # that do not have special handling of IMPORTED_IMPLIB.
     -Dtest_imported_fallback2=$<STREQUAL:$<TARGET_LINKER_FILE_NAME:importedFallback2>,special_imp>
     -Dtest_imported_fallback3=$<IF:$<PLATFORM_ID:Windows,CYGWIN,MSYS>,$<STREQUAL:$<TARGET_LINKER_FILE_NAME:importedFallback3>,imp_loc>,$<STREQUAL:$<TARGET_LINKER_FILE_NAME:importedFallback3>,fallback_loc>>
     -Dtest_imported_fallback4=$<IF:$<PLATFORM_ID:Windows,CYGWIN,MSYS>,$<STREQUAL:$<TARGET_LINKER_FILE_NAME:importedFallback4>,imp_loc>,$<STREQUAL:$<TARGET_LINKER_FILE_NAME:importedFallback4>,fallback_loc>>
@@ -403,7 +405,7 @@ add_executable(srcgenex_includes_basic "${CMAKE_CURRENT_BINARY_DIR}/srcgenex_inc
 # first include directory is useless but ensure list aspect is tested
 set_property(SOURCE "${CMAKE_CURRENT_BINARY_DIR}/srcgenex_includes_basic.c"
              PROPERTY INCLUDE_DIRECTORIES "${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/sf_includes_basic")
-if (CMAKE_GENERATOR MATCHES "Makefiles|Ninja|Watcom WMake")
+if (CMAKE_GENERATOR MATCHES "Makefiles|Ninja|Watcom WMake|FASTBuild")
   add_executable(srcgenex_includes_COMPILE_LANGUAGE "${CMAKE_CURRENT_BINARY_DIR}/srcgenex_includes_COMPILE_LANGUAGE.c")
   # first include directory is useless but ensure list aspect is tested
   set_property(SOURCE "${CMAKE_CURRENT_BINARY_DIR}/srcgenex_includes_COMPILE_LANGUAGE.c"
@@ -438,11 +440,7 @@ add_test(echo-old-style echo "\$<CONFIGURATION>")
 set_property(TEST echo-old-style PROPERTY
     PASS_REGULAR_EXPRESSION "^\\$<CONFIGURATION>\n$")
 
-add_subdirectory(CMP0044 ${CMAKE_BINARY_DIR}/CMP0044-WARN)
-set(CMP0044_TYPE NEW)
-add_subdirectory(CMP0044 ${CMAKE_BINARY_DIR}/CMP0044-NEW)
-set(CMP0044_TYPE OLD)
-add_subdirectory(CMP0044 ${CMAKE_BINARY_DIR}/CMP0044-OLD)
+add_subdirectory(CMP0044)
 
 if(NOT CMAKE_GENERATOR STREQUAL Xcode OR NOT CMAKE_OSX_ARCHITECTURES MATCHES "[;$]")
   add_library(objlib OBJECT objlib1.c objlib2.c)
@@ -504,5 +502,3 @@ if(NOT CMAKE_GENERATOR STREQUAL Xcode OR NOT CMAKE_OSX_ARCHITECTURES MATCHES "[;
     DEPENDS execobjs
   )
 endif()
-
-cmake_policy(VERSION 2.8.12) # old enough to not set CMP0044

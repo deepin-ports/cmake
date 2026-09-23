@@ -1,11 +1,12 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmTargetTraceDependencies.h"
 
 #include <sstream>
 #include <utility>
 
 #include <cmext/algorithm>
+#include <cmext/string_view>
 
 #include "cmCustomCommand.h"
 #include "cmCustomCommandGenerator.h"
@@ -39,7 +40,7 @@ cmTargetTraceDependencies::cmTargetTraceDependencies(cmGeneratorTarget* target)
     std::vector<cmSourceFile*> sources;
     this->GeneratorTarget->GetSourceFiles(sources, c);
     for (cmSourceFile* sf : sources) {
-      const std::set<cmGeneratorTarget const*> tgts =
+      std::set<cmGeneratorTarget const*> const tgts =
         this->GlobalGenerator->GetFilenameTargetDepends(sf);
       if (cm::contains(tgts, this->GeneratorTarget)) {
         std::ostringstream e;
@@ -167,9 +168,11 @@ bool cmTargetTraceDependencies::IsUtility(std::string const& dep)
   // no output-name property which old code would not have set).  In
   // that case the target name will be the file basename of the
   // dependency.
-  std::string util = cmSystemTools::GetFilenameName(dep);
-  if (cmSystemTools::GetFilenameLastExtension(util) == ".exe") {
-    util = cmSystemTools::GetFilenameWithoutLastExtension(util);
+  std::string util;
+  if (cmHasSuffix(dep, ".exe"_s)) {
+    util = cmSystemTools::GetFilenameWithoutLastExtension(dep);
+  } else {
+    util = cmSystemTools::GetFilenameName(dep);
   }
 
   // Check for a target with this name.
@@ -242,7 +245,7 @@ void cmTargetTraceDependencies::CheckCustomCommand(cmCustomCommand const& cc)
 }
 
 void cmTargetTraceDependencies::CheckCustomCommands(
-  const std::vector<cmCustomCommand>& commands)
+  std::vector<cmCustomCommand> const& commands)
 {
   for (cmCustomCommand const& command : commands) {
     this->CheckCustomCommand(command);

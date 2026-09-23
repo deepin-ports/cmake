@@ -9,7 +9,7 @@ See documentation on `CMake Development`_ for more information.
 C++ Code Style
 ==============
 
-We use `clang-format`_ version **15** to define our style for C++ code in
+We use `clang-format`_ version **18** to define our style for C++ code in
 the CMake source tree.  See the `.clang-format`_ configuration file for our
 style settings.  Use the `Utilities/Scripts/clang-format.bash`_ script to
 format source code.  It automatically runs ``clang-format`` on the set of
@@ -19,6 +19,36 @@ format only a subset of files, such as those that are locally modified.
 .. _`clang-format`: https://clang.llvm.org/docs/ClangFormat.html
 .. _`.clang-format`: ../../.clang-format
 .. _`Utilities/Scripts/clang-format.bash`: ../../Utilities/Scripts/clang-format.bash
+
+In addition, we have a few coding conventions that we prefer for new code to
+follow (which are not enforced by other tooling):
+
+* Name local variables using ``camelCase``.
+
+* Name class members and free functions using ``PascalCase``.
+
+* Reference class members using ``this->Member``.
+
+* Use east ``const`` style, e.g., ``int const`` instead of ``const int``.
+
+* Declare variables using a locally-specified type:
+
+  .. code-block:: c++
+
+    T x = f();
+
+  Use ``auto`` only if the real type explicitly appears in the initializer:
+
+  .. code-block:: c++
+
+    auto y = cm::make_unique<T>();
+    auto z = []() -> T {...}();
+
+  Exceptions:
+
+  * Iterators: ``auto i = myMap.find(myKey);``
+
+  * Lambdas: ``auto f = []() {...};``
 
 C++ Subset Permitted
 ====================
@@ -30,6 +60,11 @@ layer.  These features are defined under the namespace ``cm`` and headers
 are accessible under the ``cm/`` directory.  The headers under ``cm/`` can
 be used in place of the standard ones when extended features are needed.
 For example ``<cm/memory>`` can be used in place of ``<memory>``.
+
+The class ``cm::filesystem::path``, from the ``<cm/filesystem>`` header, is
+fully compatible with the class ``std::filesystem::path`` regarding the API but
+is a specific implementation (derived from the ``std::filesystem::path`` class)
+to ensure a behavior independent of the current locale.
 
 Available features are:
 
@@ -81,7 +116,8 @@ Available features are:
     ``cm::shared_lock``
 
   * ``<cm/type_traits>``:
-    ``cm::enable_if_t``
+    ``cm::conditional_t``, ``cm::decay_t``, ``cm::enable_if_t``,
+    ``cm::remove_cv_t``, ``cm::remove_reference_t``
 
   * ``<cm/unordered_map>``:
     ``cm::cbegin``, ``cm::cend``, ``cm::rbegin``, ``cm::rend``,
@@ -139,7 +175,7 @@ Available features are:
 
   * ``<cm/type_traits>``:
     ``cm::bool_constant``, ``cm::invoke_result_t``, ``cm::invoke_result``,
-    ``cm::void_t``
+    ``cm::is_same_v``, ``cm::void_t``
 
   * ``<cm/unordered_map>``:
     ``cm::size``, ``cm::empty``, ``cm::data``
@@ -191,6 +227,11 @@ Available features are:
   * ``<cm/vector>``:
     ``cm::erase``, ``cm::erase_if``, ``cm::ssize``
 
+* From ``C++23``:
+
+  * ``<cm/type_traits>``:
+    ``cm::is_scoped_enum``
+
 Additionally, some useful non-standard extensions to the C++ standard library
 are available in headers under the directory ``cmext/`` in namespace ``cm``.
 These are:
@@ -210,7 +251,7 @@ These are:
 
 * ``<cmext/iterator>``:
 
-  * ``cm::is_terator``:
+  * ``cm::is_iterator``:
     Checks if a type is an iterator type.
 
   * ``cm::is_input_iterator``:

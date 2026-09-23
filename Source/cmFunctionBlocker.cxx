@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmFunctionBlocker.h"
 
 #include <cassert>
@@ -11,8 +11,9 @@
 #include "cmExecutionStatus.h"
 #include "cmMakefile.h"
 #include "cmMessageType.h"
+#include "cmake.h"
 
-bool cmFunctionBlocker::IsFunctionBlocked(const cmListFileFunction& lff,
+bool cmFunctionBlocker::IsFunctionBlocked(cmListFileFunction const& lff,
                                           cmExecutionStatus& status)
 {
   if (lff.LowerCaseName() == this->StartCommandName()) {
@@ -35,7 +36,7 @@ bool cmFunctionBlocker::IsFunctionBlocked(const cmListFileFunction& lff,
           << "  " << lfc << "\n"
           << "closes on the line\n"
           << "  " << closingContext << "\n"
-          << "with mis-matching arguments.";
+          << "with mis-matching arguments.";  // noqa: spellcheck disable-line
         /* clang-format on */
         mf.IssueMessage(MessageType::AUTHOR_WARNING, e.str());
       } else if (!this->EndCommandSupportsArguments() &&
@@ -49,7 +50,15 @@ bool cmFunctionBlocker::IsFunctionBlocked(const cmListFileFunction& lff,
         mf.IssueMessage(MessageType::AUTHOR_WARNING, e.str());
       }
 
-      return this->Replay(std::move(this->Functions), status);
+      bool replayResult = this->Replay(std::move(this->Functions), status);
+      cmListFileBacktrace endCommandBT =
+        mf.GetBacktrace().Push(closingContext);
+      // if trace is enabled, print a (trivially) evaluated "end" statement
+      if (mf.GetCMakeInstance()->GetTrace()) {
+        mf.PrintCommandTrace(lff, endCommandBT,
+                             cmMakefile::CommandMissingFromStack::Yes);
+      }
+      return replayResult;
     }
   }
 

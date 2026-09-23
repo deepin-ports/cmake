@@ -1,5 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-   file Copyright.txt or https://cmake.org/licensing for details.  */
+   file LICENSE.rst or https://cmake.org/licensing for details.  */
 #include "cmGlobVerificationManager.h"
 
 #include <sstream>
@@ -15,7 +15,7 @@
 #include "cmSystemTools.h"
 #include "cmVersion.h"
 
-bool cmGlobVerificationManager::SaveVerificationScript(const std::string& path,
+bool cmGlobVerificationManager::SaveVerificationScript(std::string const& path,
                                                        cmMessenger* messenger)
 {
   if (this->Cache.empty()) {
@@ -42,8 +42,6 @@ bool cmGlobVerificationManager::SaveVerificationScript(const std::string& path,
                    << cmVersion::GetMajorVersion() << "."
                    << cmVersion::GetMinorVersion() << "\n";
 
-  verifyScriptFile << "cmake_policy(SET CMP0009 NEW)\n";
-
   for (auto const& i : this->Cache) {
     CacheEntryKey k = std::get<0>(i);
     CacheEntryValue v = std::get<1>(i);
@@ -64,13 +62,29 @@ bool cmGlobVerificationManager::SaveVerificationScript(const std::string& path,
     verifyScriptFile << "\n";
 
     verifyScriptFile << "set(OLD_GLOB\n";
-    for (const std::string& file : v.Files) {
+    for (std::string const& file : v.Files) {
       verifyScriptFile << "  \"" << file << "\"\n";
     }
     verifyScriptFile << "  )\n";
 
     verifyScriptFile << "if(NOT \"${NEW_GLOB}\" STREQUAL \"${OLD_GLOB}\")\n"
                      << "  message(\"-- GLOB mismatch!\")\n"
+                     << "  set(NEW_ONLY ${NEW_GLOB})\n"
+                     << "  set(OLD_ONLY ${OLD_GLOB})\n"
+                     << "  list(REMOVE_ITEM NEW_ONLY ${OLD_GLOB})\n"
+                     << "  list(REMOVE_ITEM OLD_ONLY ${NEW_GLOB})\n"
+                     << "  if(NEW_ONLY)\n"
+                     << "    message(\"The following files were added:\")\n"
+                     << "    foreach(VAR_FILE IN LISTS NEW_ONLY)\n"
+                     << "      message(\"  +${VAR_FILE}\")\n"
+                     << "    endforeach()\n"
+                     << "  endif()\n"
+                     << "  if(OLD_ONLY)\n"
+                     << "    message(\"The following files were removed:\")\n"
+                     << "    foreach(VAR_FILE IN LISTS OLD_ONLY)\n"
+                     << "      message(\"  -${VAR_FILE}\")\n"
+                     << "    endforeach()\n"
+                     << "  endif()\n"
                      << "  file(TOUCH_NOCREATE \"" << stampFile << "\")\n"
                      << "endif()\n";
   }
@@ -95,7 +109,7 @@ bool cmGlobVerificationManager::DoWriteVerifyTarget() const
 }
 
 bool cmGlobVerificationManager::CacheEntryKey::operator<(
-  const CacheEntryKey& r) const
+  CacheEntryKey const& r) const
 {
   if (this->Recurse < r.Recurse) {
     return true;
@@ -131,7 +145,7 @@ bool cmGlobVerificationManager::CacheEntryKey::operator<(
 }
 
 void cmGlobVerificationManager::CacheEntryKey::PrintGlobCommand(
-  std::ostream& out, const std::string& cmdVar)
+  std::ostream& out, std::string const& cmdVar)
 {
   out << "file(GLOB" << (this->Recurse ? "_RECURSE " : " ");
   out << cmdVar << " ";
@@ -146,8 +160,8 @@ void cmGlobVerificationManager::CacheEntryKey::PrintGlobCommand(
 }
 
 void cmGlobVerificationManager::AddCacheEntry(
-  const cmGlobCacheEntry& entry, const std::string& variable,
-  const cmListFileBacktrace& backtrace, cmMessenger* messenger)
+  cmGlobCacheEntry const& entry, std::string const& variable,
+  cmListFileBacktrace const& backtrace, cmMessenger* messenger)
 {
   CacheEntryKey key =
     CacheEntryKey(entry.Recurse, entry.ListDirectories, entry.FollowSymlinks,

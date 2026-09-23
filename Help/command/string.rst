@@ -22,11 +22,12 @@ Synopsis
     string(`JOIN`_ <glue> <out-var> [<input>...])
     string(`TOLOWER`_ <string> <out-var>)
     string(`TOUPPER`_ <string> <out-var>)
-    string(`LENGTH <LENGTH_>`_ <string> <out-var>)
+    string(`LENGTH`_ <string> <out-var>)
     string(`SUBSTRING`_ <string> <begin> <length> <out-var>)
     string(`STRIP`_ <string> <out-var>)
     string(`GENEX_STRIP`_ <string> <out-var>)
     string(`REPEAT`_ <string> <count> <out-var>)
+    string(`REGEX QUOTE`_ <out-var> <input>...)
 
   `Comparison`_
     string(`COMPARE`_ <op> <string1> <string2> <out-var>)
@@ -45,16 +46,21 @@ Synopsis
 
   `JSON`_
     string(JSON <out-var> [ERROR_VARIABLE <error-var>]
-           {`GET <JSON GET_>`_ | `TYPE <JSON TYPE_>`_ | `LENGTH <JSON LENGTH_>`_ | `REMOVE <JSON REMOVE_>`_}
+           {`GET <JSON-GET_>`__ | `GET_RAW <JSON-GET-RAW_>`__ | `TYPE <JSON-TYPE_>`__ | `LENGTH <JSON-LENGTH_>`__}
+           <json-string> [<member|index> ...])
+    string(JSON <out-var> [ERROR_VARIABLE <error-var>]
+           `REMOVE <JSON-REMOVE_>`__
            <json-string> <member|index> [<member|index> ...])
     string(JSON <out-var> [ERROR_VARIABLE <error-var>]
-           `MEMBER <JSON MEMBER_>`_ <json-string>
+           `MEMBER <JSON-MEMBER_>`__ <json-string>
            [<member|index> ...] <index>)
     string(JSON <out-var> [ERROR_VARIABLE <error-var>]
-           `SET <JSON SET_>`_ <json-string>
+           `SET <JSON-SET_>`__ <json-string>
            <member|index> [<member|index> ...] <value>)
     string(JSON <out-var> [ERROR_VARIABLE <error-var>]
-           `EQUAL <JSON EQUAL_>`_ <json-string1> <json-string2>)
+           `EQUAL <JSON-EQUAL_>`__ <json-string1> <json-string2>)
+    string(JSON <out-var> [ERROR_VARIABLE <error-var>]
+           `STRING_ENCODE <STRING-ENCODE_>`__ <string>)
 
 Search and Replace
 ^^^^^^^^^^^^^^^^^^
@@ -117,6 +123,17 @@ Search and Replace With Regular Expressions
   two backslashes (``\\1``) are required in CMake code to get a backslash
   through argument parsing.
 
+.. versionchanged:: 4.1
+  The ``^`` anchor now matches only at the beginning of the input
+  string instead of the beginning of each repeated search.
+  See policy :policy:`CMP0186`.
+
+  Zero-length matches are allowed in ``MATCHALL`` and ``REPLACE``.
+  Previously, they triggered an error.
+
+  The replacement expression may contain references to subexpressions that
+  didn't match anything. Previously, such references triggered an error.
+
 .. _`Regex Specification`:
 
 Regex Specification
@@ -163,10 +180,14 @@ The following characters have special meaning in regular expressions:
     :command:`if(MATCHES)`, save subgroup matches in the variables
     :variable:`CMAKE_MATCH_<n>` for ``<n>`` 0..9.
 
+.. noqa: spellcheck off
+
 ``*``, ``+`` and ``?`` have higher precedence than concatenation.  ``|``
 has lower precedence than concatenation.  This means that the regular
 expression ``^ab+d$`` matches ``abbd`` but not ``ababd``, and the regular
 expression ``^(ab|cd)$`` matches ``ab`` but not ``abd``.
+
+.. noqa: spellcheck on
 
 CMake language :ref:`Escape Sequences` such as ``\t``, ``\r``, ``\n``,
 and ``\\`` may be used to construct literal tabs, carriage returns,
@@ -274,6 +295,16 @@ Manipulation
 
   Produce the output string as the input ``<string>``
   repeated ``<count>`` times.
+
+.. signature::
+  string(REGEX QUOTE <out-var> <input>...)
+
+  .. versionadded:: 4.2
+
+  Store in an ``<out-var>`` a regular expression matching the ``<input>``.
+  All characters that have special meaning in a regular expression are
+  escaped, such that the output string can be used as part of a regular
+  expression to match the input literally.
 
 Comparison
 ^^^^^^^^^^
@@ -474,10 +505,8 @@ Generation
 
   If no explicit ``<format_string>`` is given, it will default to:
 
-  ::
-
-    %Y-%m-%dT%H:%M:%S    for local time.
-    %Y-%m-%dT%H:%M:%SZ   for UTC.
+  * ``%Y-%m-%dT%H:%M:%S`` for local time.
+  * ``%Y-%m-%dT%H:%M:%SZ`` for UTC.
 
   .. versionadded:: 3.8
     If the ``SOURCE_DATE_EPOCH`` environment variable is set,
@@ -519,10 +548,14 @@ Functionality for querying a JSON string.
   option is not present, a fatal error message is generated.  If no error
   occurs, the ``<error-variable>`` will be set to ``NOTFOUND``.
 
+In the following subcommands, the ``<json-string>`` argument should
+be written as a :ref:`Quoted Argument` to ensure the entire JSON
+string is passed as a single argument even if it contains semicolons.
+
 .. signature::
   string(JSON <out-var> [ERROR_VARIABLE <error-variable>]
-         GET <json-string> <member|index> [<member|index> ...])
-  :target: JSON GET
+         GET <json-string> [<member|index> ...])
+  :target: JSON-GET
 
   Get an element from ``<json-string>`` at the location given
   by the list of ``<member|index>`` arguments.
@@ -533,8 +566,20 @@ Functionality for querying a JSON string.
 
 .. signature::
   string(JSON <out-var> [ERROR_VARIABLE <error-variable>]
-         TYPE <json-string> <member|index> [<member|index> ...])
-  :target: JSON TYPE
+         GET_RAW <json-string> [<member|index> ...])
+  :target: JSON-GET-RAW
+
+  .. versionadded:: 4.3
+
+  Get an element from ``<json-string>`` at the location given
+  by the list of ``<member|index>`` arguments. Similar to
+  :cref:`GET <JSON-GET_>`, but does not convert number, string,
+  boolean, or null elements.
+
+.. signature::
+  string(JSON <out-var> [ERROR_VARIABLE <error-variable>]
+         TYPE <json-string> [<member|index> ...])
+  :target: JSON-TYPE
 
   Get the type of an element in ``<json-string>`` at the location
   given by the list of ``<member|index>`` arguments. The ``<out-var>``
@@ -545,7 +590,7 @@ Functionality for querying a JSON string.
   string(JSON <out-var> [ERROR_VARIABLE <error-var>]
          MEMBER <json-string>
          [<member|index> ...] <index>)
-  :target: JSON MEMBER
+  :target: JSON-MEMBER
 
   Get the name of the ``<index>``-th member in ``<json-string>``
   at the location given by the list of ``<member|index>`` arguments.
@@ -554,7 +599,7 @@ Functionality for querying a JSON string.
 .. signature::
   string(JSON <out-var> [ERROR_VARIABLE <error-variable>]
          LENGTH <json-string> [<member|index> ...])
-  :target: JSON LENGTH
+  :target: JSON-LENGTH
 
   Get the length of an element in ``<json-string>`` at the location
   given by the list of ``<member|index>`` arguments.
@@ -563,7 +608,7 @@ Functionality for querying a JSON string.
 .. signature::
   string(JSON <out-var> [ERROR_VARIABLE <error-variable>]
          REMOVE <json-string> <member|index> [<member|index> ...])
-  :target: JSON REMOVE
+  :target: JSON-REMOVE
 
   Remove an element from ``<json-string>`` at the location
   given by the list of ``<member|index>`` arguments. The JSON string
@@ -572,7 +617,7 @@ Functionality for querying a JSON string.
 .. signature::
   string(JSON <out-var> [ERROR_VARIABLE <error-variable>]
          SET <json-string> <member|index> [<member|index> ...] <value>)
-  :target: JSON SET
+  :target: JSON-SET
 
   Set an element in ``<json-string>`` at the location
   given by the list of ``<member|index>`` arguments to ``<value>``.
@@ -584,10 +629,20 @@ Functionality for querying a JSON string.
 .. signature::
   string(JSON <out-var> [ERROR_VARIABLE <error-var>]
          EQUAL <json-string1> <json-string2>)
-  :target: JSON EQUAL
+  :target: JSON-EQUAL
 
   Compare the two JSON objects given by ``<json-string1>``
   and ``<json-string2>`` for equality.  The contents of ``<json-string1>``
   and ``<json-string2>`` should be valid JSON.  The ``<out-var>``
   will be set to a true value if the JSON objects are considered equal,
   or a false value otherwise.
+
+.. signature::
+  string(JSON <out-var> [ERROR_VARIABLE <error-var>]
+         STRING_ENCODE <string>)
+  :target: STRING-ENCODE
+
+  .. versionadded:: 4.3
+
+  Turn a raw string into a JSON string surrounded by quotes. Special characters
+  will be properly escaped inside the JSON string.

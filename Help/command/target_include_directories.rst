@@ -6,8 +6,8 @@ Add include directories to a target.
 .. code-block:: cmake
 
   target_include_directories(<target> [SYSTEM] [AFTER|BEFORE]
-    <INTERFACE|PUBLIC|PRIVATE> [items1...]
-    [<INTERFACE|PUBLIC|PRIVATE> [items2...] ...])
+    {INTERFACE|PUBLIC|PRIVATE} <dir...
+    [{INTERFACE|PUBLIC|PRIVATE} <dir>...]...)
 
 Specifies include directories to use when compiling a given target.
 The named ``<target>`` must have been created by a command such
@@ -41,7 +41,7 @@ If ``SYSTEM`` is used together with ``PUBLIC`` or ``INTERFACE``, the
 populated with the specified directories.
 
 .. |command_name| replace:: ``target_include_directories``
-.. include:: GENEX_NOTE.txt
+.. include:: include/GENEX_NOTE.rst
 
 Specified include directories may be absolute paths or relative paths.
 A relative path will be interpreted as relative to the current source
@@ -71,7 +71,7 @@ Creating Relocatable Packages
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. |INTERFACE_PROPERTY_LINK| replace:: :prop_tgt:`INTERFACE_INCLUDE_DIRECTORIES`
-.. include:: /include/INTERFACE_INCLUDE_DIRECTORIES_WARNING.txt
+.. include:: /include/INTERFACE_INCLUDE_DIRECTORIES_WARNING.rst
 
 See Also
 ^^^^^^^^

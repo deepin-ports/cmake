@@ -1,5 +1,5 @@
 # Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
-# file Copyright.txt or https://cmake.org/licensing for details.
+# file LICENSE.rst or https://cmake.org/licensing for details.
 
 
 # determine the compiler to use for C programs
@@ -16,7 +16,6 @@
 #   CMAKE_C_COMPILER
 #   CMAKE_AR
 #   CMAKE_RANLIB
-#   CMAKE_COMPILER_IS_GNUCC
 #
 # If not already set before, it also sets
 #   _CMAKE_TOOLCHAIN_PREFIX
@@ -46,7 +45,7 @@ else()
         set(CMAKE_C_COMPILER_ARG1 "${CMAKE_C_FLAGS_ENV_INIT}" CACHE STRING "Arguments to C compiler")
       endif()
       if(NOT EXISTS ${CMAKE_C_COMPILER_INIT})
-        message(FATAL_ERROR "Could not find compiler set in environment variable CC:\n$ENV{CC}.")
+        message(FATAL_ERROR "Could not find the compiler specified in the environment variable CC:\n$ENV{CC}.")
       endif()
     endif()
 
@@ -210,16 +209,14 @@ else()
   set(_SET_CMAKE_C_COMPILER_SYSROOT "")
 endif()
 
-if(CMAKE_C_COMPILER_ARCHITECTURE_ID)
-  set(_SET_CMAKE_C_COMPILER_ARCHITECTURE_ID
-    "set(CMAKE_C_COMPILER_ARCHITECTURE_ID ${CMAKE_C_COMPILER_ARCHITECTURE_ID})")
-else()
-  set(_SET_CMAKE_C_COMPILER_ARCHITECTURE_ID "")
-endif()
-
 if(MSVC_C_ARCHITECTURE_ID)
   set(SET_MSVC_C_ARCHITECTURE_ID
     "set(MSVC_C_ARCHITECTURE_ID ${MSVC_C_ARCHITECTURE_ID})")
+endif()
+
+if(CMAKE_C_MSVC_I18N_DIR)
+  set(SET_CMAKE_C_MSVC_I18N_DIR
+    "set(CMAKE_C_MSVC_I18N_DIR ${CMAKE_C_MSVC_I18N_DIR})")
 endif()
 
 if(CMAKE_C_XCODE_ARCHS)
